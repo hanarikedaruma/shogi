@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>本格対面将棋 - 高音質版</title>
+<title>本格対面将棋 - 鋭い駒音版</title>
 <style>
 :root{
     --board-size: min(88vw, 70vh);
@@ -20,7 +20,7 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .gote-turn { transform: rotate(180deg); }
 #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); box-shadow: 0 5px 20px rgba(0,0,0,0.4); box-sizing: content-box; flex-shrink: 0; }
 .cell { border: 0.3px solid rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
-.piece-shape { width: 82%; height: 85%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 0.5px solid #333; box-sizing: border-box; opacity: 0; transition: opacity 0.1s; }
+.piece-shape { width: 82%; height: 85%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 0.5px solid #333; box-sizing: border-box; opacity: 0; }
 .piece-visible { opacity: 1; }
 .p-gote { transform: rotate(180deg); }
 .promoted { color: #d32f2f; background: #fff5e6; }
@@ -45,51 +45,34 @@ let hands={[S]:[], [G]:[]};
 let turn=S, selected=null, possibleMoves=[], gameOver=false;
 let audioCtx = null;
 
-// 音声合成エンジン（改良版）
-function playKomaSound(type) {
+// 高い「パチッ」という音を合成
+function playPachi(volume = 0.5, freq = 1500) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    
+    // 鋭い衝撃音を作るためにホワイトノイズに近い成分を混ぜる
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
+    
+    osc.type = 'triangle'; // 少し角のある波形
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(freq / 2, now + 0.05);
+    
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+    
     osc.connect(gain);
     gain.connect(audioCtx.destination);
+    
+    osc.start();
+    osc.stop(now + 0.05);
+}
 
-    const now = audioCtx.currentTime;
-
-    if (type === 'tap') { // 配置音
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(900, now);
-        osc.frequency.exponentialRampToValueAtTime(100, now + 0.04);
-        gain.gain.setValueAtTime(0.15, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
-        osc.start(); osc.stop(now + 0.04);
-    } else if (type === 'capture') { // 駒を取る音「ポコッ」
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(400, now);
-        osc.frequency.quadraticCurveTo(600, now + 0.02, 150, now + 0.08);
-        gain.gain.setValueAtTime(0.4, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-        osc.start(); osc.stop(now + 0.08);
-    } else if (type === 'board') { // 盤に打つ音「パチッ」
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(1000, now);
-        osc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
-        gain.gain.setValueAtTime(0.5, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-        osc.start(); osc.stop(now + 0.12);
-    } else if (type === 'promote') { // 成る音「ピキーン」
-        const osc2 = audioCtx.createOscillator();
-        const gain2 = audioCtx.createGain();
-        osc2.connect(gain2); gain2.connect(audioCtx.destination);
-        osc.type = 'sine'; osc2.type = 'sine';
-        osc.frequency.setValueAtTime(1200, now);
-        osc2.frequency.setValueAtTime(1800, now);
-        gain.gain.setValueAtTime(0.2, now);
-        gain2.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-        osc.start(); osc2.start();
-        osc.stop(now + 0.4); osc2.stop(now + 0.4);
-    }
+// 駒が重なる・取る時の「パパチッ」
+async function playDoublePachi() {
+    playPachi(0.4, 1800);
+    await new Promise(r => setTimeout(r, 50));
+    playPachi(0.6, 1500);
 }
 
 const PIECE_DATA={
@@ -120,7 +103,7 @@ async function animatedInit() {
     for (let item of placements) {
         board[item.r][item.c] = item.p;
         render();
-        playKomaSound('tap');
+        playPachi(0.2, 2000); // 初期配置は軽快な音
         await new Promise(r => setTimeout(r, 60));
     }
 }
@@ -193,26 +176,30 @@ async function handleClick(r,c){
         if(m){
             let p = JSON.parse(JSON.stringify(board[selected.r][selected.c]));
             
-            // 駒を取るかどうかの判定と音
+            // 駒を取る、または盤上の駒の前に移動する場合
             if(target) {
-                playKomaSound('capture');
+                await playDoublePachi(); // パパチッ
                 hands[turn].push({type:target.type, side:turn, p:false});
-                await new Promise(res => setTimeout(res, 100));
+            } else {
+                playPachi(); // パチッ
             }
-            playKomaSound('board');
 
-            // 成り判定
+            // ダイアログ表示前に盤面を仮更新（UIの不整合を防ぐ）
+            const oldR = selected.r; const oldC = selected.c;
+            
             if(!p.p && PIECE_DATA[p.type].canPromote){
-                const inZone = (p.side===S && (r<=2||selected.r<=2)) || (p.side===G && (r>=6||selected.r>=6));
+                const inZone = (p.side===S && (r<=2||oldR<=2)) || (p.side===G && (r>=6||oldR>=6));
                 if(inZone){
                     const mustPromote = (p.type==='歩' || p.type==='香') && (p.side===S?r===0:r===8) || (p.type==='桂' && (p.side===S?r<=1:r>=7));
+                    // confirmを呼び出す
                     if(mustPromote || confirm("成りますか？")) {
                         p.p=true;
-                        playKomaSound('promote');
+                        // ダイアログを閉じた後にパチッ
+                        setTimeout(() => playPachi(0.7, 1600), 50);
                     }
                 }
             }
-            board[r][c]=p; board[selected.r][selected.c]=null;
+            board[r][c]=p; board[oldR][oldC]=null;
             turn=(turn===S)?G:S;
             if(isCheckmate(turn)) win(turn===S?G:S);
         }
@@ -222,7 +209,7 @@ async function handleClick(r,c){
             const tempBoard = JSON.parse(JSON.stringify(board));
             tempBoard[r][c] = {type: selected.pieceType, side: turn, p: false};
             if(!isCheck(turn, tempBoard)) {
-                playKomaSound('board');
+                playPachi(); // 駒を打つ音
                 board[r][c]=hands[turn].splice(selected.handIdx,1)[0];
                 turn=(turn===S)?G:S;
                 if(isCheckmate(turn)) win(turn===S?G:S);
