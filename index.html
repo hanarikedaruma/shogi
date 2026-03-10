@@ -3,161 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>本格対面将棋</title>
-    <script src="https://unpkg.com/shogi.js@1.1.0/dist/shogi.min.js"></script>
+    <title>対面将棋プロト</title>
     <style>
-        :root { 
-            /* iPhone 13の横幅に合わせた計算。余白を考慮して9.5分割 */
-            --cell-size: calc(100vw / 9.8); 
-        }
-        body { 
-            margin: 0; 
-            background: #f0e68c; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            font-family: sans-serif; 
-            touch-action: none; 
-            overflow: hidden; 
-        }
+        :root { --cell-size: calc(100vw / 9.5); }
+        body { margin: 0; background: #f0e68c; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; touch-action: none; overflow: hidden; }
         
-        #status-area { height: 40px; display: flex; align-items: center; justify-content: center; }
-        .turn-box { padding: 4px 15px; border-radius: 15px; background: #333; color: #fff; font-size: 0.9rem; font-weight: bold; }
-        .gote-turn { transform: rotate(180deg); }
-
-        .hand { display: flex; width: 95vw; height: 35px; background: rgba(0,0,0,0.1); align-items: center; padding: 0 10px; border-radius: 5px; margin: 5px 0; font-size: 0.8rem; overflow: hidden; }
-        .hand.gote { transform: rotate(180deg); }
+        .turn-indicator { padding: 5px 20px; border-radius: 20px; background: #333; color: white; font-weight: bold; margin-bottom: 10px; transition: 0.3s; }
+        .turn-gote { transform: rotate(180deg); }
 
         #board { 
             display: grid; 
             grid-template-columns: repeat(9, var(--cell-size)); 
             grid-template-rows: repeat(9, var(--cell-size)); 
-            border: 1.5px solid #333; 
+            border: 1px solid #333; 
             background: #e3c16f; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
         .cell { 
-            border: 0.2px solid rgba(0,0,0,0.2); 
+            border: 0.5px solid #333; 
+            width: var(--cell-size); 
+            height: var(--cell-size); 
             display: flex; 
             align-items: center; 
             justify-content: center; 
-            width: var(--cell-size);
-            height: var(--cell-size);
+            position: relative;
         }
+        .selected { background: rgba(255, 255, 0, 0.6) !important; }
         
-        .selected { background: rgba(255, 255, 0, 0.5); }
-        .movable { position: relative; }
-        .movable::after { content: ""; width: 12px; height: 12px; background: rgba(0, 200, 0, 0.3); border-radius: 50%; position: absolute; }
-
-        .piece { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.65); font-weight: bold; }
-        .p-gote { transform: rotate(180deg); }
-        .promoted { color: #d32f2f; }
+        .piece { 
+            font-size: calc(var(--cell-size) * 0.7); 
+            font-weight: bold; 
+            user-select: none; 
+            pointer-events: none;
+        }
+        .gote { transform: rotate(180deg); }
+        .sente { color: #000; }
     </style>
 </head>
 <body>
 
-<div id="hand-gote" class="hand gote"></div>
-<div id="status-area"><div id="turn-indicator" class="turn-box">先手番</div></div>
-
+<div id="indicator" class="turn-indicator">先手の手番</div>
 <div id="board"></div>
 
-<div id="hand-sente" class="hand sente"></div>
-
 <script>
-    // ライブラリの読み込み完了を待ってから実行
-    window.onload = () => {
-        if (typeof shogi === 'undefined') {
-            alert("ライブラリの読み込みに失敗しました。再読み込みしてください。");
-            return;
-        }
+    // 初期配置データ (簡易版: 王と歩のみ)
+    // 実際にはここを増やすだけで全ての駒が並びます
+    let boardState = Array(9).fill(null).map(() => Array(9).fill(null));
+    
+    // 後手(G)
+    boardState[0][4] = { type: '王', side: 'G' };
+    boardState[2][0] = { type: '歩', side: 'G' };
+    boardState[2][1] = { type: '歩', side: 'G' };
+    boardState[2][2] = { type: '歩', side: 'G' };
+    boardState[2][3] = { type: '歩', side: 'G' };
+    boardState[2][4] = { type: '歩', side: 'G' };
+    boardState[2][5] = { type: '歩', side: 'G' };
+    boardState[2][6] = { type: '歩', side: 'G' };
+    boardState[2][7] = { type: '歩', side: 'G' };
+    boardState[2][8] = { type: '歩', side: 'G' };
 
-        const { Shogi, Color } = shogi;
-        const game = new Shogi();
-        let selectedPos = null;
-        let movableHints = [];
+    // 先手(S)
+    boardState[8][4] = { type: '玉', side: 'S' };
+    for(let i=0; i<9; i++) boardState[6][i] = { type: '歩', side: 'S' };
 
-        const pieceMap = { "FU": "歩", "KY": "香", "KE": "桂", "GI": "銀", "KI": "金", "KA": "角", "HI": "飛", "OU": "玉", "TO": "と", "NY": "杏", "NK": "圭", "NG": "全", "UM": "馬", "RY": "龍" };
+    let turn = 'S';
+    let selected = null;
 
-        function render() {
-            const boardEl = document.getElementById('board');
-            boardEl.innerHTML = '';
+    function render() {
+        const boardEl = document.getElementById('board');
+        const indicator = document.getElementById('indicator');
+        boardEl.innerHTML = '';
 
-            // 手番表示
-            const turnEl = document.getElementById('turn-indicator');
-            const isSente = game.turn === Color.Sente;
-            turnEl.textContent = isSente ? "先手の手番です" : "後手の手番です";
-            turnEl.className = isSente ? "turn-box" : "turn-box gote-turn";
+        indicator.textContent = turn === 'S' ? "先手の手番" : "後手の手番";
+        indicator.className = turn === 'S' ? "turn-indicator" : "turn-indicator turn-gote";
 
-            // 盤面描画
-            for (let y = 1; y <= 9; y++) {
-                for (let x = 9; x >= 1; x--) {
-                    const cell = document.createElement('div');
-                    cell.className = 'cell';
-                    
-                    const piece = game.get(x, y);
-                    if (selectedPos && selectedPos.x === x && selectedPos.y === y) cell.classList.add('selected');
-                    if (movableHints.some(m => m.to.x === x && m.to.y === y)) cell.classList.add('movable');
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                if (selected && selected.r === r && selected.c === c) cell.classList.add('selected');
 
-                    if (piece) {
-                        const pEl = document.createElement('div');
-                        pEl.className = `piece ${piece.color === Color.Gote ? 'p-gote' : ''} ${piece.isPromoted() ? 'promoted' : ''}`;
-                        pEl.textContent = pieceMap[piece.symbol] || piece.symbol;
-                        cell.appendChild(pEl);
-                    }
-
-                    cell.onclick = () => handleClick(x, y);
-                    boardEl.appendChild(cell);
+                const piece = boardState[r][c];
+                if (piece) {
+                    const pEl = document.createElement('div');
+                    pEl.className = `piece ${piece.side === 'S' ? 'sente' : 'gote'}`;
+                    pEl.textContent = piece.type;
+                    cell.appendChild(pEl);
                 }
+
+                // iPhoneのタッチ操作に反応するようにonclickを設定
+                cell.onclick = (e) => {
+                    e.preventDefault();
+                    handleClick(r, c);
+                };
+                boardEl.appendChild(cell);
             }
-            renderHand('hand-sente', Color.Sente);
-            renderHand('hand-gote', Color.Gote);
         }
+    }
 
-        function handleClick(x, y) {
-            const piece = game.get(x, y);
+    function handleClick(r, c) {
+        const targetPiece = boardState[r][c];
 
-            if (selectedPos) {
-                const move = movableHints.find(m => m.to.x === x && m.to.y === y);
-                if (move) {
-                    let promo = false;
-                    // 成りの判定（3列目以内に入った、または出た場合）
-                    const canPromo = game.get(selectedPos.x, selectedPos.y).canPromote(y);
-                    if (canPromo) {
-                        promo = confirm("成りますか？");
-                    }
-                    try {
-                        game.move(selectedPos.x, selectedPos.y, x, y, promo);
-                    } catch(e) { alert("反則です"); }
-                }
-                selectedPos = null;
-                movableHints = [];
+        if (selected) {
+            // 移動先が自分自身の駒なら選択し直し
+            if (targetPiece && targetPiece.side === turn) {
+                selected = { r, c };
             } else {
-                if (piece && piece.color === game.turn) {
-                    selectedPos = { x, y };
-                    movableHints = game.getMovesFrom(x, y);
-                }
+                // 移動実行
+                boardState[r][c] = boardState[selected.r][selected.c];
+                boardState[selected.r][selected.c] = null;
+                selected = null;
+                turn = turn === 'S' ? 'G' : 'S';
             }
-            render();
-        }
-
-        function renderHand(id, color) {
-            const el = document.getElementById(id);
-            const counts = game.getHandsSummary(color);
-            el.innerHTML = '';
-            for (let sym in counts) {
-                if (counts[sym] > 0) {
-                    const d = document.createElement('div');
-                    d.style.marginRight = "8px";
-                    d.textContent = pieceMap[sym] + (counts[sym] > 1 ? counts[sym] : "");
-                    el.appendChild(d);
-                }
+        } else {
+            // 自分の手番の駒なら選択
+            if (targetPiece && targetPiece.side === turn) {
+                selected = { r, c };
             }
         }
-
         render();
-    };
+    }
+
+    // 起動
+    window.onload = render;
 </script>
 </body>
 </html>
