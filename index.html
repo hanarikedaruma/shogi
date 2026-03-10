@@ -8,19 +8,20 @@
         :root { --cell-size: calc(100vw / 9.6); --board-color: #e3c16f; }
         body { margin: 0; background: #f0e68c; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; touch-action: none; overflow: hidden; }
         
-        /* 手番表示 */
-        #turn-info { padding: 6px 20px; border-radius: 20px; background: #333; color: white; font-weight: bold; margin: 10px 0; transition: 0.3s; }
+        /* 手番と持ち駒 */
+        .hand { display: flex; width: 95vw; height: 30px; background: rgba(0,0,0,0.1); align-items: center; padding: 2px 5px; border-radius: 5px; font-size: 0.8rem; overflow-x: auto; gap: 5px; }
+        .hand.gote { transform: rotate(180deg); margin-bottom: 5px; }
+        .hand.sente { margin-top: 5px; }
+        .turn-box { padding: 4px 15px; border-radius: 15px; background: #333; color: #fff; font-size: 0.9rem; font-weight: bold; margin: 5px 0; transition: 0.3s; }
         .gote-turn { transform: rotate(180deg); }
 
         /* 盤面 */
-        #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); border: 1.5px solid #333; background: var(--board-color); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); border: 1.5px solid #333; background: var(--board-color); }
         .cell { border: 0.2px solid rgba(0,0,0,0.3); width: var(--cell-size); height: var(--cell-size); display: flex; align-items: center; justify-content: center; position: relative; }
         
-        /* ハイライト */
         .selected { background: rgba(255, 255, 0, 0.5) !important; }
-        .movable::after { content: ""; width: 10px; height: 10px; background: rgba(0, 200, 0, 0.3); border-radius: 50%; position: absolute; }
+        .movable::after { content: ""; width: 10px; height: 10px; background: rgba(0, 200, 0, 0.4); border-radius: 50%; position: absolute; }
 
-        /* 駒 */
         .piece { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.65); font-weight: bold; user-select: none; }
         .p-gote { transform: rotate(180deg); }
         .promoted { color: #d32f2f; }
@@ -28,34 +29,37 @@
 </head>
 <body>
 
-<div id="turn-info">先手の手番</div>
+<div id="hand-gote" class="hand gote"></div>
+<div id="turn-display" class="turn-box">先手の手番</div>
 <div id="board"></div>
+<div id="hand-sente" class="hand sente"></div>
 
 <script>
-    const S = 'S', G = 'G'; // 先手・後手
+    const S = 'S', G = 'G';
     let board = Array(9).fill(null).map(() => Array(9).fill(null));
+    let hands = { [S]: [], [G]: [] };
     let turn = S;
-    let selected = null;
+    let selected = null; // {r, c} or {handIndex, side}
     let possibleMoves = [];
 
-    // 駒の定義と動き
-    const PIECES = {
-        '歩': { moves: [[-1, 0]], pMoves: 'gold' },
-        '香': { moves: 'range_fwd', pMoves: 'gold' },
-        '桂': { moves: [[-2, -1], [-2, 1]], pMoves: 'gold' },
-        '銀': { moves: [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 1]], pMoves: 'gold' },
-        '金': { moves: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, 0]] },
-        '角': { moves: 'range_diag', pMoves: 'range_diag_plus' },
-        '飛': { moves: 'range_ortho', pMoves: 'range_ortho_plus' },
-        '玉': { moves: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]] },
-        '王': { moves: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]] }
+    const PIECE_DATA = {
+        '歩': { moves: [[-1, 0]], canPromote: true, pName: 'と' },
+        '香': { moves: 'fwd_range', canPromote: true, pName: '杏' },
+        '桂': { moves: [[-2, -1], [-2, 1]], canPromote: true, pName: '圭' },
+        '銀': { moves: [[-1,-1], [-1,0], [-1,1], [1,-1], [1,1]], canPromote: true, pName: '全' },
+        '金': { moves: [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,0]] },
+        '角': { moves: 'diag_range', canPromote: true, pName: '馬' },
+        '飛': { moves: 'ortho_range', canPromote: true, pName: '龍' },
+        '玉': { moves: [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]] },
+        '王': { moves: [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]] }
     };
+    const GOLD_MOVES = PIECE_DATA['金'].moves;
 
-    function initBoard() {
-        const layout = ["香","桂","銀","金","王","金","銀","桂","香"];
+    function init() {
+        const line = ["香","桂","銀","金","王","金","銀","桂","香"];
         for(let i=0; i<9; i++) {
-            board[0][i] = { type: layout[i], side: G, p: false };
-            board[8][i] = { type: layout[i]==='王'?'玉':layout[i], side: S, p: false };
+            board[0][i] = { type: line[i], side: G, p: false };
+            board[8][i] = { type: i===4?'玉':line[i], side: S, p: false };
             board[2][i] = { type: '歩', side: G, p: false };
             board[6][i] = { type: '歩', side: S, p: false };
         }
@@ -64,93 +68,118 @@
         render();
     }
 
-    function getValidMoves(r, c) {
-        const piece = board[r][c];
-        if (!piece) return [];
+    function getMoves(r, c) {
+        const p = board[r][c];
+        if (!p) return [];
         let moves = [];
-        const type = piece.p ? (PIECES[piece.type].pMoves || 'gold') : PIECES[piece.type].moves;
-        const directions = (type === 'gold') ? PIECES['金'].moves : (Array.isArray(type) ? type : []);
-
-        const checkAdd = (dr, dc) => {
-            let nr = r + (piece.side === S ? dr : -dr);
-            let nc = c + (piece.side === S ? dc : -dc);
-            if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) {
-                if (!board[nr][nc] || board[nr][nc].side !== piece.side) moves.push({r: nr, c: nc});
-            }
-        };
-
-        if (Array.isArray(type)) {
-            type.forEach(d => checkAdd(d[0], d[1]));
+        let mData = (p.p && !['飛','角'].includes(p.type)) ? GOLD_MOVES : PIECE_DATA[p.type].moves;
+        
+        if (Array.isArray(mData)) {
+            mData.forEach(d => {
+                let nr = r + (p.side === S ? d[0] : -d[0]), nc = c + (p.side === S ? d[1] : -d[1]);
+                if (nr>=0 && nr<9 && nc>=0 && nc<9 && (!board[nr][nc] || board[nr][nc].side !== p.side)) moves.push({r:nr, c:nc});
+            });
         } else {
-            // 飛・角・香などの走り駒
-            const vectors = type.includes('ortho') ? [[0,1],[0,-1],[1,0],[-1,0]] : 
-                           type.includes('diag') ? [[1,1],[1,-1],[-1,1],[-1,-1]] : [[-1,0]];
-            vectors.forEach(v => {
+            let dirs = [];
+            if (mData === 'fwd_range') dirs = [[-1, 0]];
+            else if (mData === 'diag_range') dirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
+            else if (mData === 'ortho_range') dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+            
+            dirs.forEach(d => {
                 let nr = r, nc = c;
                 while(true) {
-                    nr += (piece.side === S ? v[0] : -v[0]);
-                    nc += (piece.side === S ? v[1] : -v[1]);
-                    if (nr<0||nr>=9||nc<0||nc>=9) break;
-                    if (!board[nr][nc]) { moves.push({r:nr, c:nc}); }
-                    else { if(board[nr][nc].side !== piece.side) moves.push({r:nr, c:nc}); break; }
+                    nr += (p.side === S ? d[0] : -d[0]); nc += (p.side === S ? d[1] : -d[1]);
+                    if (nr<0 || nr>=9 || nc<0 || nc>=9) break;
+                    if (!board[nr][nc]) moves.push({r:nr, c:nc});
+                    else { if(board[nr][nc].side !== p.side) moves.push({r:nr, c:nc}); break; }
                 }
             });
-            // 竜・馬の追加1マス
-            if (type.includes('plus')) [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]].forEach(v => checkAdd(v[0], v[1]));
+            if (p.p) { // 竜・馬の追加移動
+                let extra = (p.type === '飛') ? [[1,1],[1,-1],[-1,1],[-1,-1]] : [[0,1],[0,-1],[1,0],[-1,0]];
+                extra.forEach(d => {
+                    let nr = r + d[0], nc = c + d[1];
+                    if (nr>=0 && nr<9 && nc>=0 && nc<9 && (!board[nr][nc] || board[nr][nc].side !== p.side)) moves.push({r:nr, c:nc});
+                });
+            }
         }
         return moves;
     }
 
+    function handleClick(r, c) {
+        if (selected && selected.r !== undefined) {
+            const m = possibleMoves.find(x => x.r === r && x.c === c);
+            if (m) {
+                let p = board[selected.r][selected.c];
+                // 取る処理
+                if (board[r][c]) {
+                    let captured = board[r][c];
+                    hands[turn].push({ type: captured.type, side: turn, p: false });
+                }
+                // 成り判定
+                if (!p.p && PIECE_DATA[p.type].canPromote) {
+                    if ((p.side === S && (r <= 2 || selected.r <= 2)) || (p.side === G && (r >= 6 || selected.r >= 6))) {
+                        if (confirm("成りますか？")) p.p = true;
+                    }
+                }
+                board[r][c] = p; board[selected.r][selected.c] = null;
+                turn = (turn === S) ? G : S;
+            }
+            selected = null; possibleMoves = [];
+        } else if (board[r][c] && board[r][c].side === turn) {
+            selected = {r, c}; possibleMoves = getMoves(r, c);
+        } else if (selected && selected.handIdx !== undefined) {
+            // 持ち駒を打つ（簡易実装：空きマスならどこでも）
+            if (!board[r][c]) {
+                board[r][c] = hands[turn].splice(selected.handIdx, 1)[0];
+                turn = (turn === S) ? G : S;
+            }
+            selected = null;
+        }
+        render();
+    }
+
     function render() {
-        const boardEl = document.getElementById('board');
-        const infoEl = document.getElementById('turn-info');
-        boardEl.innerHTML = '';
-        infoEl.textContent = turn === S ? "先手の手番" : "後手の手番";
-        infoEl.className = turn === S ? "" : "gote-turn";
+        const bEl = document.getElementById('board');
+        bEl.innerHTML = '';
+        document.getElementById('turn-display').textContent = turn === S ? "先手の手番" : "後手の手番";
+        document.getElementById('turn-display').className = "turn-box " + (turn === G ? "gote-turn" : "");
 
         for (let r = 0; r < 9; r++) {
             for (let c = 0; c < 9; c++) {
                 const cell = document.createElement('div');
                 cell.className = 'cell' + (selected && selected.r === r && selected.c === c ? ' selected' : '');
                 if (possibleMoves.some(m => m.r === r && m.c === c)) cell.classList.add('movable');
-
                 const p = board[r][c];
                 if (p) {
                     const pEl = document.createElement('div');
                     pEl.className = `piece ${p.side === G ? 'p-gote' : ''} ${p.p ? 'promoted' : ''}`;
-                    pEl.textContent = p.p ? (p.type === '飛' ? '龍' : p.type === '角' ? '馬' : 'と') : p.type;
-                    if (p.p && !['飛','角'].includes(p.type)) pEl.textContent = PIECES[p.type].pMoves === 'gold' || p.type==='歩' ? 'と' : '全'; // 簡易表示
+                    pEl.textContent = p.p ? (PIECE_DATA[p.type].pName) : p.type;
                     cell.appendChild(pEl);
                 }
                 cell.onclick = () => handleClick(r, c);
-                boardEl.appendChild(cell);
+                bEl.appendChild(cell);
             }
         }
+        renderHand('hand-sente', S); renderHand('hand-gote', G);
     }
 
-    function handleClick(r, c) {
-        if (selected) {
-            const move = possibleMoves.find(m => m.r === r && m.c === c);
-            if (move) {
-                const p = board[selected.r][selected.c];
-                // 成り判定
-                if (!p.p && PIECES[p.type].pMoves !== undefined) {
-                    const isSentePromo = p.side === S && (r <= 2 || selected.r <= 2);
-                    const isGotePromo = p.side === G && (r >= 6 || selected.r >= 6);
-                    if ((isSentePromo || isGotePromo) && confirm("成りますか？")) p.p = true;
-                }
-                board[r][c] = p;
-                board[selected.r][selected.c] = null;
-                turn = turn === S ? G : S;
-            }
-            selected = null; possibleMoves = [];
-        } else if (board[r][c] && board[r][c].side === turn) {
-            selected = {r, c};
-            possibleMoves = getValidMoves(r, c);
-        }
-        render();
+    function renderHand(id, side) {
+        const el = document.getElementById(id);
+        el.innerHTML = '';
+        hands[side].forEach((p, idx) => {
+            const d = document.createElement('div');
+            d.textContent = p.type;
+            d.style.cursor = 'pointer';
+            if (selected && selected.handIdx === idx && selected.side === side) d.style.color = 'red';
+            d.onclick = (e) => {
+                e.stopPropagation();
+                if (turn === side) { selected = { handIdx: idx, side: side }; possibleMoves = []; render(); }
+            };
+            el.appendChild(d);
+        });
     }
-    initBoard();
+
+    init();
 </script>
 </body>
 </html>
