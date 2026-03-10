@@ -3,43 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>本格対面将棋 - 完全版</title>
+<title>本格対面将棋 - 決定版</title>
 <style>
 :root{
-    --board-size: min(92vw, 72vh);
+    --board-size: min(94vw, 70vh);
     --cell-size: calc(var(--board-size) / 9);
     --board-color: #e3c16f;
     --piece-color: #ffebbc;
 }
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #f0e68c; overflow: hidden; touch-action: manipulation; }
-body { display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: serif; }
+body { display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: "Hiragino Mincho ProN", serif; }
 
-.hand { display: flex; width: var(--board-size); height: 48px; background: #d2b48c; align-items: center; padding: 0 5px; border: 2px solid #8b4513; border-radius: 4px; box-sizing: border-box; overflow-x: auto; gap: 4px; }
-.hand.gote { margin-bottom: 8px; }
-.hand.sente { margin-top: 8px; }
-.turn-box { padding: 5px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.85rem; margin-bottom: 5px; min-width: 80px; text-align: center; }
+.hand { display: flex; width: var(--board-size); height: 50px; background: #d2b48c; align-items: center; padding: 0 5px; border: 2px solid #8b4513; border-radius: 4px; box-sizing: border-box; overflow-x: auto; gap: 4px; }
+.hand.gote { margin-bottom: 10px; }
+.hand.sente { margin-top: 10px; }
+.turn-box { padding: 6px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; margin-bottom: 5px; min-width: 100px; text-align: center; font-weight: bold; }
 
-#board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); position: relative; }
-.cell { border: 0.2px solid rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
+#board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+.cell { border: 0.5px solid rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
 
-.piece-shape { width: 85%; height: 88%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.48); font-weight: bold; border: 0.5px solid #333; pointer-events: none; user-select: none; }
+.piece-shape { width: 85%; height: 88%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 1px solid #444; pointer-events: none; user-select: none; transition: transform 0.1s; }
 .p-gote { transform: rotate(180deg); }
-.promoted { color: #d32f2f; background: #fff5e6; }
-.selected { background: #ffeb3b !important; }
-.movable::after { content: ""; width: 12px; height: 12px; background: rgba(0, 150, 0, 0.4); border-radius: 50%; position: absolute; }
-.in-check { background: rgba(255, 0, 0, 0.3) !important; }
+.promoted { color: #d32f2f; }
+.selected { background: rgba(255, 235, 59, 0.6) !important; }
+.movable::after { content: ""; width: 14px; height: 14px; background: rgba(0, 150, 0, 0.4); border-radius: 50%; position: absolute; }
+.in-check { background: rgba(255, 0, 0, 0.4) !important; animation: blink 0.8s infinite; }
+@keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 3px solid #333; padding: 20px; z-index: 1000; display: none; text-align: center; border-radius: 12px; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
-#promo-dialog button { margin: 10px; padding: 12px 24px; font-size: 1.1rem; cursor: pointer; border-radius: 6px; font-weight: bold; }
-#start-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: white; cursor: pointer; }
+#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 4px solid #333; padding: 25px; z-index: 1000; display: none; text-align: center; border-radius: 15px; box-shadow: 0 0 50px rgba(0,0,0,0.6); }
+#promo-dialog button { margin: 10px; padding: 12px 24px; font-size: 1.2rem; cursor: pointer; border-radius: 8px; border: 1px solid #333; background: var(--piece-color); font-weight: bold; }
+
+#start-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: white; cursor: pointer; }
+.btn-start { padding: 15px 40px; border: 2px solid white; border-radius: 40px; font-size: 1.5rem; transition: 0.3s; }
+.btn-start:hover { background: white; color: black; }
 </style>
 </head>
 <body>
 
-<div id="start-overlay"><div style="font-size: 1.5rem; border: 2px solid white; padding: 15px 30px; border-radius: 30px;">対局開始</div></div>
+<div id="start-overlay"><div class="btn-start">対局開始</div></div>
 
 <div id="promo-dialog">
-    <div style="margin-bottom:15px; font-weight: bold;">成りますか？</div>
+    <div style="margin-bottom:15px; font-size: 1.2rem; font-weight: bold;">成りますか？</div>
     <button id="promo-yes">成る</button>
     <button id="promo-no">成らず</button>
 </div>
@@ -56,23 +60,6 @@ let hands={[S]:[], [G]:[]};
 let turn=S, selected=null, possibleMoves=[], gameOver=false;
 let audioCtx = null;
 
-function playSound() {
-    if (!audioCtx) return;
-    try {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const t = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(380, t);
-        osc.frequency.exponentialRampToValueAtTime(150, t + 0.1);
-        g.gain.setValueAtTime(0.3, t);
-        g.gain.linearRampToValueAtTime(0, t + 0.1);
-        osc.connect(g); g.connect(audioCtx.destination);
-        osc.start(); osc.stop(t + 0.12);
-    } catch(e) {}
-}
-
 const PIECE_DATA={
     '歩':{moves:[[-1,0]], canPromote:true, pName:'と'},
     '香':{moves:'fwd', canPromote:true, pName:'杏'},
@@ -85,22 +72,49 @@ const PIECE_DATA={
     '王':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]}
 };
 
+function playSound() {
+    if (!audioCtx) return;
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, t);
+        osc.frequency.exponentialRampToValueAtTime(150, t + 0.12);
+        g.gain.setValueAtTime(0.4, t);
+        g.gain.linearRampToValueAtTime(0, t + 0.12);
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.start(); osc.stop(t + 0.15);
+    } catch(e) {}
+}
+
 async function startApp() {
     document.getElementById('start-overlay').style.display = 'none';
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
     
-    const line = ["香","桂","銀","金","王","金","銀","桂","香"];
-    const ps = [];
-    for(let i=0; i<9; i++) {
-        ps.push({r:0,c:i,type:line[i],side:G},{r:8,c:i,type:i===4?'玉':line[i],side:S},{r:2,c:i,type:'歩',side:G},{r:6,c:i,type:'歩',side:S});
-    }
-    ps.push({r:1,c:1,type:'飛',side:G},{r:1,c:7,type:'角',side:G},{r:7,c:1,type:'角',side:S},{r:7,c:7,type:'飛',side:S});
+    const setup = [
+        {r:0, pieces:["香","桂","銀","金","王","金","銀","桂","香"], side:G},
+        {r:1, c:1, type:"飛", side:G}, {r:1, c:7, type:"角", side:G},
+        {r:2, type:"歩", side:G},
+        {r:6, type:"歩", side:S},
+        {r:7, c:1, type:"角", side:S}, {r:7, c:7, type:"飛", side:S},
+        {r:8, pieces:["香","桂","銀","金","玉","金","銀","桂","香"], side:S}
+    ];
 
-    for (let item of ps) {
-        board[item.r][item.c] = {type:item.type, side:item.side, p:false};
-        render();
-        playSound();
-        await new Promise(r => setTimeout(r, 45));
+    for (let s of setup) {
+        for (let i=0; i<9; i++) {
+            if (s.pieces) {
+                board[s.r][i] = {type:s.pieces[i], side:s.side, p:false};
+            } else if (s.type && (s.c === undefined || s.c === i)) {
+                board[s.r][i] = {type:s.type, side:s.side, p:false};
+            }
+            if (board[s.r][i]) {
+                render();
+                playSound();
+                await new Promise(r => setTimeout(r, 40));
+            }
+        }
     }
 }
 
@@ -120,7 +134,7 @@ function getRawMoves(r, c, b) {
             let nr=r, nc=c;
             while(true){
                 nr+=d[0]*s; nc+=d[1]*s;
-                if(nr<0||nr>=9||nc<0||nr>=9) break;
+                if(nr<0||nr>=9||nc<0||nc>=9) break;
                 if(!b[nr][nc]) moves.push({r:nr, c:nc});
                 else { if(b[nr][nc].side!==p.side) moves.push({r:nr, c:nc}); break; }
             }
@@ -138,26 +152,18 @@ function getRawMoves(r, c, b) {
 
 function isCheck(side, b) {
     let kp = null;
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
-        if(b[r][c] && (b[r][c].type==='王'||b[r][c].type==='玉') && b[r][c].side===side) kp={r,c};
-    }
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && (b[r][c].type==='王'||b[r][c].type==='玉') && b[r][c].side===side) kp={r,c};
     if(!kp) return false;
     const opp = (side===S?G:S);
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
-        if(b[r][c] && b[r][c].side===opp) {
-            if(getRawMoves(r, c, b).some(m => m.r===kp.r && m.c===kp.c)) return true;
-        }
-    }
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && b[r][c].side===opp) if(getRawMoves(r, c, b).some(m => m.r===kp.r && m.c===kp.c)) return true;
     return false;
 }
 
 function getLegalMoves(r, c) {
-    const raw = getRawMoves(r, c, board);
-    return raw.filter(m => {
-        const nextBoard = JSON.parse(JSON.stringify(board));
-        nextBoard[m.r][m.c] = nextBoard[r][c];
-        nextBoard[r][c] = null;
-        return !isCheck(turn, nextBoard);
+    return getRawMoves(r, c, board).filter(m => {
+        const nextB = JSON.parse(JSON.stringify(board));
+        nextB[m.r][m.c] = nextB[r][c]; nextB[r][c] = null;
+        return !isCheck(turn, nextB);
     });
 }
 
@@ -183,23 +189,20 @@ function handleClick(r,c){
             nextB[r][c] = {type:selected.type, side:turn, p:false};
             if(!isCheck(turn, nextB)){
                 board[r][c] = hands[turn].splice(selected.hIdx, 1)[0];
-                board[r][c].side = turn; playSound(); turn = (turn===S?G:S);
-            } else { alert("王手が解消されません"); }
+                board[r][c].side = turn; playSound(); turn=(turn===S?G:S); checkEndGame();
+            }
         }
         selected=null; possibleMoves=[];
     } else if(target && target.side===turn){
-        selected={r,c};
-        possibleMoves=getLegalMoves(r,c);
+        selected={r,c}; possibleMoves=getLegalMoves(r,c);
     }
     render();
 }
 
 function isDropLegal(type, r, c, side){
-    if(type==='歩'){
-        for(let i=0; i<9; i++) if(board[i][c] && board[i][c].type==='歩' && !board[i][c].p && board[i][c].side===side) return false;
-    }
-    if((type==='歩'||type==='香') && (side===S?r===0:r===8)) return false;
-    if(type==='桂' && (side===S?r<=1:r>=7)) return false;
+    if(type==='歩'){for(let i=0;i<9;i++)if(board[i][c]&&board[i][c].type==='歩'&&!board[i][c].p&&board[i][c].side===side)return false;}
+    if((type==='歩'||type==='香')&&(side===S?r===0:r===8)) return false;
+    if(type==='桂'&&(side===S?r<=1:r>=7)) return false;
     return true;
 }
 
@@ -211,20 +214,33 @@ function showPromo(fr,fc,tr,tc){
 
 function finalizeMove(fr,fc,tr,tc,promote){
     const p=board[fr][fc]; const target=board[tr][tc];
-    if(target) {
-        // 取った駒を自分の持ち駒に追加し、先手/後手属性を自分に書き換える
-        let captured = {type:target.type, side:turn, p:false};
-        hands[turn].push(captured);
-    }
+    if(target) hands[turn].push({type:target.type, side:turn, p:false});
     if(promote) p.p=true;
     board[tr][tc]=p; board[fr][fc]=null;
-    playSound(); turn=(turn===S?G:S); render();
+    playSound(); turn=(turn===S?G:S); checkEndGame(); render();
+}
+
+function checkEndGame(){
+    let hasMove = false;
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(board[r][c] && board[r][c].side===turn && getLegalMoves(r,c).length>0) hasMove=true;
+    if(!hasMove && hands[turn].length > 0){
+        for(let i=0; i<hands[turn].length; i++){
+            for(let r=0; r<9; r++) for(let c=0; c<9; c++){
+                if(!board[r][c] && isDropLegal(hands[turn][i].type, r, c, turn)){
+                    const nb = JSON.parse(JSON.stringify(board));
+                    nb[r][c] = {type:hands[turn][i].type, side:turn, p:false};
+                    if(!isCheck(turn, nb)) hasMove=true;
+                }
+            }
+        }
+    }
+    if(!hasMove){ gameOver=true; setTimeout(()=>alert("詰みです！ " + (turn===S?"後手":"先手") + "の勝ち。"), 100); }
 }
 
 function render(){
     const bEl=document.getElementById('board'); bEl.innerHTML='';
     document.getElementById('turn-display').textContent=turn===S?"先手番":"後手番";
-    const checkNow = isCheck(turn, board);
+    const inCheckNow = isCheck(turn, board);
     for(let r=0;r<9;r++){
         for(let c=0;c<9;c++){
             const cell=document.createElement('div');
@@ -234,7 +250,7 @@ function render(){
             if(p){
                 const s=document.createElement('div');
                 s.className=`piece-shape ${p.side===G?'p-gote':''} ${p.p?'promoted':''}`;
-                if(checkNow && (p.type==='王'||p.type==='玉') && p.side===turn) cell.classList.add('in-check');
+                if(inCheckNow && (p.type==='王'||p.type==='玉') && p.side===turn) cell.classList.add('in-check');
                 s.textContent=p.p?PIECE_DATA[p.type].pName:p.type;
                 cell.appendChild(s);
             }
@@ -248,16 +264,12 @@ function render(){
 function renderH(id,side){
     const el=document.getElementById(id); el.innerHTML='';
     hands[side].forEach((p,i)=>{
-        const wrapper = document.createElement('div');
         const d=document.createElement('div');
         d.className='piece-shape'+(selected&&selected.hIdx===i&&selected.side===side?' selected':'');
         if(side===G) d.classList.add('p-gote');
-        d.style.width='36px'; d.style.height='42px'; d.textContent=p.type;
-        wrapper.onclick=(e)=>{
-            e.stopPropagation();
-            if(turn===side){ selected={hIdx:i, side:side, type:p.type}; possibleMoves=[]; render(); }
-        };
-        wrapper.appendChild(d); el.appendChild(wrapper);
+        d.style.width='38px'; d.style.height='44px'; d.textContent=p.type;
+        d.onclick=(e)=>{ e.stopPropagation(); if(turn===side){selected={hIdx:i,side,type:p.type}; possibleMoves=[]; render();} };
+        el.appendChild(d);
     });
 }
 document.getElementById('start-overlay').addEventListener('click', startApp);
