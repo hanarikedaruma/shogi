@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>本格対面将棋（詰み判定実装）</title>
+<title>本格対面将棋（王手回避強制版）</title>
 <style>
 :root{
-    --board-size:90vw;
+    --board-size:min(90vw, 90vh);
     --cell-size:calc(var(--board-size)/9);
     --board-color:#e3c16f;
     --piece-color:#ffebbc;
@@ -23,10 +23,10 @@ body{ display:flex; flex-direction:column; align-items:center; justify-content:c
 .piece-shape{ width:80%; height:85%; background:var(--piece-color); clip-path:polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display:flex; align-items:center; justify-content:center; font-size:calc(var(--cell-size)*0.5); font-weight:bold; border:0.5px solid #333; box-sizing:border-box; }
 .p-gote{ transform:rotate(180deg); }
 .promoted{ color:#d32f2f; background:#fff5e6; }
-.selected .piece-shape{ background:#ffeb3b; outline:2px solid #f44336; }
-.movable::after{ content:""; width:10px; height:10px; background:rgba(0,200,0,0.6); border-radius:50%; position:absolute; }
-.check-warning { background: rgba(255, 0, 0, 0.3) !important; animation: blink 1s infinite; }
-@keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+.selected .piece-shape{ background: #ffeb3b; outline:2px solid #f44336; }
+.movable::after{ content:""; width:10px; height:10px; background:rgba(0, 200, 0, 0.6); border-radius:50%; position:absolute; }
+/* 王手時の警告 */
+.check-warning { background: rgba(255, 0, 0, 0.5) !important; box-shadow: inset 0 0 10px red; }
 .hand-selected { background:#ffeb3b!important; outline:1.5px solid #f44336; }
 </style>
 </head>
@@ -67,7 +67,8 @@ function init(){
     render();
 }
 
-function getMoves(r, c, b = board) {
+// 駒の基本的な動きを取得
+function getRawMoves(r, c, b) {
     const p = b[r][c]; if (!p) return [];
     let moves = [];
     let mData = (p.p && !['飛','角'].includes(p.type)) ? PIECE_DATA['金'].moves : PIECE_DATA[p.type].moves;
@@ -99,8 +100,8 @@ function getMoves(r, c, b = board) {
     return moves;
 }
 
-// 王手されているか判定
-function isCheck(side, b = board) {
+// 王手チェック（自玉が相手の駒に狙われているか）
+function isCheck(side, b) {
     let kingPos = null;
     for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
         if(b[r][c] && (b[r][c].type==='王'||b[r][c].type==='玉') && b[r][c].side===side) kingPos = {r, c};
@@ -109,40 +110,43 @@ function isCheck(side, b = board) {
     const oppSide = (side===S?G:S);
     for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
         if(b[r][c] && b[r][c].side===oppSide) {
-            const moves = getMoves(r, c, b);
-            if(moves.some(m => m.r===kingPos.r && m.c===kingPos.c)) return true;
+            if(getRawMoves(r, c, b).some(m => m.r===kingPos.r && m.c===kingPos.c)) return true;
         }
     }
     return false;
 }
 
-// 詰み判定（動かせる手があるか全探索）
+// 王手を回避できる合法手のみを取得
+function getLegalMoves(r, c) {
+    const rawMoves = getRawMoves(r, c, board);
+    return rawMoves.filter(m => {
+        const tempBoard = JSON.parse(JSON.stringify(board));
+        tempBoard[m.r][m.c] = tempBoard[r][c];
+        tempBoard[r][c] = null;
+        return !isCheck(turn, tempBoard); // 動かした後に王手されていなければOK
+    });
+}
+
+// 詰み判定
 function isCheckmate(side) {
-    if(!isCheck(side)) return false;
-    // 盤上の駒を動かしてみる
+    // 盤上の全駒に対して合法手があるか確認
     for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
         if(board[r][c] && board[r][c].side===side) {
-            const moves = getMoves(r, c);
-            for(let m of moves) {
-                const tempBoard = JSON.parse(JSON.stringify(board));
-                tempBoard[m.r][m.c] = tempBoard[r][c];
-                tempBoard[r][c] = null;
-                if(!isCheck(side, tempBoard)) return false; // 王手を回避できる手がある
-            }
+            if(getLegalMoves(r, c).length > 0) return false;
         }
     }
-    // 持ち駒を打ってみる
+    // 持ち駒を打って王手を回避できるか確認
     const h = hands[side];
     for(let i=0; i<h.length; i++) {
         for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
             if(!board[r][c] && isDropLegal(h[i].type, r, c, side, false)) {
                 const tempBoard = JSON.parse(JSON.stringify(board));
                 tempBoard[r][c] = {type: h[i].type, side: side, p: false};
-                if(!isCheck(side, tempBoard)) return false; // 持ち駒で王手を回避できる
+                if(!isCheck(side, tempBoard)) return false;
             }
         }
     }
-    return true;
+    return isCheck(side, board); // 王手されていて、かつ回避手段がないなら詰み
 }
 
 function handleClick(r,c){
@@ -154,12 +158,6 @@ function handleClick(r,c){
         if(m){
             let p = JSON.parse(JSON.stringify(board[selected.r][selected.c]));
             const oldTarget = board[r][c];
-            
-            // 仮移動して自玉に王手がかからないかチェック（自殺手の禁止）
-            const tempBoard = JSON.parse(JSON.stringify(board));
-            tempBoard[r][c] = p; tempBoard[selected.r][selected.c] = null;
-            if(isCheck(turn, tempBoard)) { alert("王手放置はできません"); selected=null; render(); return; }
-
             if(oldTarget) hands[turn].push({type:oldTarget.type, side:turn, p:false});
             
             if(!p.p && PIECE_DATA[p.type].canPromote){
@@ -171,23 +169,28 @@ function handleClick(r,c){
             }
             board[r][c]=p; board[selected.r][selected.c]=null;
             turn=(turn===S)?G:S;
-            if(isCheckmate(turn)) win(turn===S?G:S, true);
+            if(isCheckmate(turn)) win(turn===S?G:S);
         }
         selected=null; possibleMoves=[];
     }else if(selected && selected.handIdx!==undefined){
         if(!target && isDropLegal(selected.pieceType, r, c, selected.side)){
-            // 打つ前に王手放置チェック
             const tempBoard = JSON.parse(JSON.stringify(board));
             tempBoard[r][c] = {type: selected.pieceType, side: turn, p: false};
-            if(isCheck(turn, tempBoard)) { alert("王手放置はできません"); selected=null; render(); return; }
-
-            board[r][c]=hands[turn].splice(selected.handIdx,1)[0];
-            turn=(turn===S)?G:S;
-            if(isCheckmate(turn)) win(turn===S?G:S, true);
+            if(!isCheck(turn, tempBoard)) {
+                board[r][c]=hands[turn].splice(selected.handIdx,1)[0];
+                turn=(turn===S)?G:S;
+                if(isCheckmate(turn)) win(turn===S?G:S);
+            } else {
+                alert("王手を回避してください");
+            }
         }
         selected=null; possibleMoves=[];
     }else if(target && target.side===turn){
-        selected={r,c}; possibleMoves=getMoves(r,c);
+        selected={r,c};
+        possibleMoves=getLegalMoves(r, c); // 合法手のみを表示
+        if(possibleMoves.length === 0) {
+            // 王手されているのに動かせる駒がない場合など
+        }
     }
     render();
 }
@@ -197,37 +200,35 @@ function isDropLegal(type, r, c, side, showAlert = true){
         for(let i=0; i<9; i++) if(board[i][c] && board[i][c].type==='歩' && !board[i][c].p && board[i][c].side===side) {
             if(showAlert) alert("二歩は反則です"); return false;
         }
-        // 打ち歩詰め（簡易チェック：詰んでいる状態で歩を打つのは本来反則）
-        // ※厳密な打ち歩詰め判定は負荷が高いため今回は省略
     }
     if((type==='歩' || type==='香') && (side===S?r===0:r===8)) return false;
     if(type==='桂' && (side===S?r<=1:r>=7)) return false;
     return true;
 }
 
-function win(side, isMate = false){
+function win(side){
     gameOver=true;
     render();
-    setTimeout(()=>{ alert((side===S?"先手":"後手")+"の勝ちです！" + (isMate?"（詰み）":"")); location.reload(); },200);
+    setTimeout(()=>{ alert((side===S?"先手":"後手")+"の勝ちです！（詰み）"); location.reload(); },200);
 }
 
 function render(){
     const bEl=document.getElementById('board'); bEl.innerHTML='';
-    const turnDisplay = document.getElementById('turn-display');
-    turnDisplay.textContent = turn===S?"先手番":"後手番";
-    turnDisplay.className="turn-box "+(turn===G?"gote-turn":"");
-    const checkState = isCheck(turn);
+    document.getElementById('turn-display').textContent=turn===S?"先手番":"後手番";
+    document.getElementById('turn-display').className="turn-box "+(turn===G?"gote-turn":"");
+    const checkState = isCheck(turn, board);
 
     for(let r=0;r<9;r++){
         for(let c=0;c<9;c++){
             const cell=document.createElement('div');
             cell.className='cell'+(selected&&selected.r===r&&selected.c===c?' selected':'');
-            if(possibleMoves.some(m=>m.r===r&&m.c===c))cell.classList.add('movable');
+            if(possibleMoves.some(m => m.r===r && m.c===c)) cell.classList.add('movable');
             const p=board[r][c];
             if(p){
                 const shape=document.createElement('div');
                 shape.className=`piece-shape ${p.side===G?'p-gote':''} ${p.p?'promoted':''}`;
-                if(checkState && (p.type==='王'||p.type==='玉') && p.side===turn) shape.parentElement.classList.add('check-warning');
+                // 王手されている玉を赤く強調
+                if(checkState && (p.type==='王'||p.type==='玉') && p.side===turn) cell.classList.add('check-warning');
                 shape.textContent=p.p?PIECE_DATA[p.type].pName:p.type;
                 cell.appendChild(shape);
             }
