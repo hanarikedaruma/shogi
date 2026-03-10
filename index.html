@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>本格対面将棋 - 成り修正版</title>
+<title>本格将棋 - CPU対戦実装版</title>
 <style>
 :root{
     --board-size: min(94vw, 70vh);
@@ -17,7 +17,7 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .hand { display: flex; width: var(--board-size); height: 50px; background: #d2b48c; align-items: center; padding: 0 5px; border: 2px solid #8b4513; border-radius: 4px; box-sizing: border-box; overflow-x: auto; gap: 4px; }
 .hand.gote { margin-bottom: 10px; }
 .hand.sente { margin-top: 10px; }
-.turn-box { padding: 6px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; margin-bottom: 5px; min-width: 100px; text-align: center; font-weight: bold; }
+.turn-box { padding: 6px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; margin-bottom: 5px; min-width: 120px; text-align: center; font-weight: bold; }
 
 #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
 .cell { border: 0.5px solid rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
@@ -31,9 +31,9 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .in-check { background: rgba(255, 0, 0, 0.4) !important; animation: blink 0.8s infinite; }
 @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 4px solid #333; padding: 25px; z-index: 1000; display: none; text-align: center; border-radius: 15px; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
-#promo-dialog button { margin: 10px; padding: 12px 24px; font-size: 1.2rem; cursor: pointer; font-weight: bold; border-radius: 8px; border: 1px solid #333; }
-#promo-dialog button#promo-yes { background: #ffebbc; }
+#promo-dialog, #mode-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 4px solid #333; padding: 25px; z-index: 3000; display: none; text-align: center; border-radius: 15px; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+#promo-dialog button, #mode-dialog button { margin: 10px; padding: 12px 24px; font-size: 1.1rem; cursor: pointer; font-weight: bold; border-radius: 8px; border: 1px solid #333; background: #eee; }
+#promo-dialog button:active, #mode-dialog button:active { background: #ccc; }
 
 #start-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: white; cursor: pointer; }
 .btn-start { padding: 15px 40px; border: 2px solid white; border-radius: 40px; font-size: 1.5rem; }
@@ -42,6 +42,12 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 <body>
 
 <div id="start-overlay"><div class="btn-start">対局開始</div></div>
+
+<div id="mode-dialog">
+    <div style="margin-bottom:15px; font-size: 1.2rem; font-weight: bold;">モードを選択してください</div>
+    <button onclick="startGame('PVP')">対人戦 (対面)</button>
+    <button onclick="startGame('CPU')">CPU戦 (後手AI)</button>
+</div>
 
 <div id="promo-dialog">
     <div style="margin-bottom:15px; font-weight: bold;">成りますか？</div>
@@ -58,41 +64,45 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 const S='S', G='G';
 let board=Array(9).fill(null).map(()=>Array(9).fill(null));
 let hands={[S]:[], [G]:[]};
-let turn=S, selected=null, possibleMoves=[], gameOver=false;
+let turn=S, selected=null, possibleMoves=[], gameOver=false, gameMode='PVP';
 let audioCtx = null;
 
 const PIECE_DATA={
-    '歩':{moves:[[-1,0]], canPromote:true, pName:'と'},
-    '香':{moves:'fwd', canPromote:true, pName:'杏'},
-    '桂':{moves:[[-2,-1],[-2,1]], canPromote:true, pName:'圭'},
-    '銀':{moves:[[-1,-1],[-1,0],[-1,1],[1,-1],[1,1]], canPromote:true, pName:'全'},
-    '金':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,0]]},
-    '角':{moves:'diag', canPromote:true, pName:'馬'},
-    '飛':{moves:'ortho', canPromote:true, pName:'龍'},
-    '玉':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]},
-    '王':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]}
+    '歩':{moves:[[-1,0]], canPromote:true, pName:'と', val:100},
+    '香':{moves:'fwd', canPromote:true, pName:'杏', val:300},
+    '桂':{moves:[[-2,-1],[-2,1]], canPromote:true, pName:'圭', val:400},
+    '銀':{moves:[[-1,-1],[-1,0],[-1,1],[1,-1],[1,1]], canPromote:true, pName:'全', val:500},
+    '金':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,0]], val:600},
+    '角':{moves:'diag', canPromote:true, pName:'馬', val:800},
+    '飛':{moves:'ortho', canPromote:true, pName:'龍', val:1000},
+    '玉':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]], val:10000},
+    '王':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]], val:10000}
 };
+const PROM_VAL = {'と':400, '杏':500, '圭':500, '全':500, '馬':1000, '龍':1200};
 
 function playSound() {
     if (!audioCtx) return;
     try {
         if (audioCtx.state === 'suspended') audioCtx.resume();
         const t = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(400, t);
+        const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(400, t);
         osc.frequency.exponentialRampToValueAtTime(150, t + 0.1);
-        g.gain.setValueAtTime(0.4, t);
-        g.gain.linearRampToValueAtTime(0, t + 0.1);
+        g.gain.setValueAtTime(0.4, t); g.gain.linearRampToValueAtTime(0, t + 0.1);
         osc.connect(g); g.connect(audioCtx.destination);
         osc.start(); osc.stop(t + 0.12);
     } catch(e) {}
 }
 
-async function startApp() {
+document.getElementById('start-overlay').onclick = () => {
     document.getElementById('start-overlay').style.display = 'none';
+    document.getElementById('mode-dialog').style.display = 'block';
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+};
+
+async function startGame(mode) {
+    gameMode = mode;
+    document.getElementById('mode-dialog').style.display = 'none';
     const setup = [
         {r:0, pieces:["香","桂","銀","金","王","金","銀","桂","香"], side:G},
         {r:1, c:1, type:"飛", side:G}, {r:1, c:7, type:"角", side:G},
@@ -104,7 +114,7 @@ async function startApp() {
         for (let i=0; i<9; i++) {
             if (s.pieces) board[s.r][i] = {type:s.pieces[i], side:s.side, p:false};
             else if (s.type && (s.c === undefined || s.c === i)) board[s.r][i] = {type:s.type, side:s.side, p:false};
-            if (board[s.r][i]) { render(); playSound(); await new Promise(r => setTimeout(r, 40)); }
+            if (board[s.r][i]) { render(); playSound(); await new Promise(r => setTimeout(r, 30)); }
         }
     }
 }
@@ -124,8 +134,7 @@ function getRawMoves(r, c, b) {
         dirs.forEach(d => {
             let nr=r, nc=c;
             while(true){
-                nr+=d[0]*s; nc+=d[1]*s;
-                if(nr<0||nr>=9||nc<0||nc>=9) break;
+                nr+=d[0]*s; nc+=d[1]*s; if(nr<0||nr>=9||nc<0||nc>=9) break;
                 if(!b[nr][nc]) moves.push({r:nr, c:nc});
                 else { if(b[nr][nc].side!==p.side) moves.push({r:nr, c:nc}); break; }
             }
@@ -150,92 +159,112 @@ function isCheck(side, b) {
     return false;
 }
 
-function getLegalMoves(r, c) {
-    return getRawMoves(r, c, board).filter(m => {
-        const nextB = JSON.parse(JSON.stringify(board));
+function getLegalMoves(r, c, b = board, t = turn) {
+    return getRawMoves(r, c, b).filter(m => {
+        const nextB = JSON.parse(JSON.stringify(b));
         nextB[m.r][m.c] = nextB[r][c]; nextB[r][c] = null;
-        return !isCheck(turn, nextB);
+        return !isCheck(t, nextB);
     });
 }
 
-function getDropMoves(type, side) {
+function getDropMoves(type, side, b = board) {
     let moves = [];
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(!board[r][c] && isDropLegal(type, r, c, side)){
-        const nb = JSON.parse(JSON.stringify(board)); nb[r][c] = {type, side, p:false};
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(!b[r][c] && isDropLegal(type, r, c, side, b)){
+        const nb = JSON.parse(JSON.stringify(b)); nb[r][c] = {type, side, p:false};
         if(!isCheck(side, nb)) moves.push({r, c});
     }
     return moves;
 }
 
-function isDropLegal(type, r, c, side){
-    if(type==='歩'){for(let i=0;i<9;i++)if(board[i][c]&&board[i][c].type==='歩'&&!board[i][c].p&&board[i][c].side===side)return false;}
+function isDropLegal(type, r, c, side, b){
+    if(type==='歩'){for(let i=0;i<9;i++)if(b[i][c]&&b[i][c].type==='歩'&&!b[i][c].p&&b[i][c].side===side)return false;}
     if((type==='歩'||type==='香')&&(side===S?r===0:r===8)) return false;
     if(type==='桂'&&(side===S?r<=1:r>=7)) return false;
     return true;
 }
 
 function handleClick(r,c){
-    if(gameOver || document.getElementById('promo-dialog').style.display==='block') return;
-    
+    if(gameOver || (gameMode==='CPU' && turn===G) || document.getElementById('promo-dialog').style.display==='block') return;
     if(selected && selected.hIdx !== undefined){
         if(possibleMoves.find(x => x.r === r && x.c === c)){
             board[r][c] = hands[turn].splice(selected.hIdx, 1)[0];
-            board[r][c].side = turn; playSound(); turn=(turn===S?G:S); checkEndGame();
+            board[r][c].side = turn; playSound(); turn=(turn===S?G:S); render(); checkEndGame(); if(gameMode==='CPU' && !gameOver) cpuThink();
         }
         selected=null; possibleMoves=[];
-    } 
-    else if(selected && selected.r !== undefined){
+    } else if(selected && selected.r !== undefined){
         const m = possibleMoves.find(x => x.r === r && x.c === c);
         if(m) {
             const p = board[selected.r][selected.c];
-            // 成りの判定 (自陣に入る、自陣から出る、自陣内を移動する)
             const isEntry = (p.side===S && r<=2) || (p.side===G && r>=6);
             const isExit = (p.side===S && selected.r<=2) || (p.side===G && selected.r>=6);
-            const canP = !p.p && PIECE_DATA[p.type].canPromote && (isEntry || isExit);
-
-            if(canP){
-                // 行き所のない駒は強制成り
+            if(!p.p && PIECE_DATA[p.type].canPromote && (isEntry || isExit)){
                 const mustP = (p.type==='歩'||p.type==='香')&&(p.side===S?r===0:r===8) || (p.type==='桂'&&(p.side===S?r<=1:r>=7));
                 if(mustP) finalizeMove(selected.r,selected.c,r,c,true);
                 else showPromo(selected.r,selected.c,r,c);
             } else finalizeMove(selected.r,selected.c,r,c,false);
         }
         selected=null; possibleMoves=[];
-    } 
-    else {
+    } else {
         const target = board[r][c];
-        if(target && target.side === turn){
-            selected = {r, c}; possibleMoves = getLegalMoves(r, c);
-        }
+        if(target && target.side === turn){ selected = {r, c}; possibleMoves = getLegalMoves(r, c); }
     }
     render();
 }
 
 function showPromo(fr,fc,tr,tc){
-    const d=document.getElementById('promo-dialog');
-    d.style.display='block';
+    const d=document.getElementById('promo-dialog'); d.style.display='block';
     document.getElementById('promo-yes').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,true); };
     document.getElementById('promo-no').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,false); };
 }
 
 function finalizeMove(fr,fc,tr,tc,promote){
-    const p=board[fr][fc]; const target=board[tr][tc];
-    if(target) hands[turn].push({type:target.type, side:turn, p:false});
-    if(promote) p.p=true;
-    board[tr][tc]=p; board[fr][fc]=null;
-    playSound(); turn=(turn===S?G:S); checkEndGame(); render();
+    const p=board[fr][fc]; if(board[tr][tc]) hands[turn].push({type:board[tr][tc].type, side:turn, p:false});
+    if(promote) p.p=true; board[tr][tc]=p; board[fr][fc]=null;
+    playSound(); turn=(turn===S?G:S); render(); checkEndGame();
+    if(gameMode==='CPU' && turn===G && !gameOver) cpuThink();
 }
 
 function checkEndGame(){
     let hasMove = false;
     for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(board[r][c] && board[r][c].side===turn && getLegalMoves(r,c).length>0) hasMove=true;
     if(!hasMove) for(let p of hands[turn]) if(getDropMoves(p.type, turn).length > 0) hasMove = true;
-    if(!hasMove){ gameOver=true; setTimeout(()=>alert("詰みです！"), 100); }
+    if(!hasMove){ gameOver=true; setTimeout(()=>alert("詰みです！" + (turn===S?"後手":"先手")+"の勝ち"), 200); }
+}
+
+async function cpuThink(){
+    await new Promise(r => setTimeout(r, 800));
+    let best = {score: -99999};
+    let moves = [];
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(board[r][c] && board[r][c].side===G) {
+        getLegalMoves(r,c,board,G).forEach(m => moves.push({type:'move', fr:r, fc:c, tr:m.r, tc:m.c}));
+    }
+    hands[G].forEach((p,i) => getDropMoves(p.type, G).forEach(d => moves.push({type:'drop', hIdx:i, tr:d.r, tc:d.c, piece:p.type})));
+    
+    if(moves.length === 0) return;
+
+    moves.forEach(m => {
+        let score = Math.random() * 10;
+        if(m.type==='move'){
+            const target = board[m.tr][m.tc];
+            if(target) score += (target.p ? PROM_VAL[PIECE_DATA[target.type].pName] : PIECE_DATA[target.type].val);
+            if(m.tr >= 6) score += 30; // 成りへの接近
+        }
+        if(score > best.score) { best = {score, ...m}; }
+    });
+
+    if(best.type==='move'){
+        const p = board[best.fr][best.fc];
+        const mustP = (p.type==='歩'||p.type==='香')&&best.tr===8 || (p.type==='桂'&&best.tr>=7);
+        finalizeMove(best.fr, best.fc, best.tr, best.tc, mustP || (!p.p && best.tr >= 6));
+    } else {
+        board[best.tr][best.tc] = hands[G].splice(best.hIdx, 1)[0];
+        board[best.tr][best.tc].side = G; playSound(); turn=S; render(); checkEndGame();
+    }
 }
 
 function render(){
     const bEl=document.getElementById('board'); bEl.innerHTML='';
-    document.getElementById('turn-display').textContent=turn===S?"先手番":"後手番";
+    document.getElementById('turn-display').textContent=turn===S?"先手番":"後手番" + (gameMode==='CPU' && turn===G ? " (思考中...)" : "");
     const inCheckNow = isCheck(turn, board);
     for(let r=0;r<9;r++) for(let c=0;c<9;c++){
         const cell=document.createElement('div');
@@ -246,11 +275,9 @@ function render(){
             const s=document.createElement('div');
             s.className=`piece-shape ${p.side===G?'p-gote':''} ${p.p?'promoted':''}`;
             if(inCheckNow && (p.type==='王'||p.type==='玉') && p.side===turn) cell.classList.add('in-check');
-            s.textContent=p.p?PIECE_DATA[p.type].pName:p.type;
-            cell.appendChild(s);
+            s.textContent=p.p?PIECE_DATA[p.type].pName:p.type; cell.appendChild(s);
         }
-        cell.onclick=()=>handleClick(r,c);
-        bEl.appendChild(cell);
+        cell.onclick=()=>handleClick(r,c); bEl.appendChild(cell);
     }
     renderH('hand-sente',S); renderH('hand-gote',G);
 }
@@ -263,7 +290,7 @@ function renderH(id,side){
         if(side===G) d.classList.add('p-gote');
         d.style.width='38px'; d.style.height='44px'; d.textContent=p.type;
         d.onclick=(e)=>{ e.stopPropagation(); 
-            if(!gameOver && side===turn){
+            if(!gameOver && side===turn && !(gameMode==='CPU' && turn===G)){
                 if(selected && selected.hIdx===i) {selected=null; possibleMoves=[];}
                 else {selected={hIdx:i, side, type:p.type}; possibleMoves=getDropMoves(p.type, side);}
                 render();
@@ -272,7 +299,6 @@ function renderH(id,side){
         el.appendChild(d);
     });
 }
-document.getElementById('start-overlay').addEventListener('click', startApp);
 </script>
 </body>
 </html>
