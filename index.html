@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>本格将棋 - CPU対戦実装版</title>
+<title>本格将棋 - 高度AI実装版</title>
 <style>
 :root{
     --board-size: min(94vw, 70vh);
@@ -17,7 +17,7 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .hand { display: flex; width: var(--board-size); height: 50px; background: #d2b48c; align-items: center; padding: 0 5px; border: 2px solid #8b4513; border-radius: 4px; box-sizing: border-box; overflow-x: auto; gap: 4px; }
 .hand.gote { margin-bottom: 10px; }
 .hand.sente { margin-top: 10px; }
-.turn-box { padding: 6px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; margin-bottom: 5px; min-width: 120px; text-align: center; font-weight: bold; }
+.turn-box { padding: 6px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; margin-bottom: 5px; min-width: 140px; text-align: center; font-weight: bold; }
 
 #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
 .cell { border: 0.5px solid rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
@@ -33,7 +33,6 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 
 #promo-dialog, #mode-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 4px solid #333; padding: 25px; z-index: 3000; display: none; text-align: center; border-radius: 15px; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
 #promo-dialog button, #mode-dialog button { margin: 10px; padding: 12px 24px; font-size: 1.1rem; cursor: pointer; font-weight: bold; border-radius: 8px; border: 1px solid #333; background: #eee; }
-#promo-dialog button:active, #mode-dialog button:active { background: #ccc; }
 
 #start-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: white; cursor: pointer; }
 .btn-start { padding: 15px 40px; border: 2px solid white; border-radius: 40px; font-size: 1.5rem; }
@@ -44,9 +43,9 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 <div id="start-overlay"><div class="btn-start">対局開始</div></div>
 
 <div id="mode-dialog">
-    <div style="margin-bottom:15px; font-size: 1.2rem; font-weight: bold;">モードを選択してください</div>
-    <button onclick="startGame('PVP')">対人戦 (対面)</button>
-    <button onclick="startGame('CPU')">CPU戦 (後手AI)</button>
+    <div style="margin-bottom:15px; font-size: 1.2rem; font-weight: bold;">モードを選択</div>
+    <button onclick="startGame('PVP')">対人戦</button>
+    <button onclick="startGame('CPU')">CPU戦 (高度AI)</button>
 </div>
 
 <div id="promo-dialog">
@@ -114,7 +113,7 @@ async function startGame(mode) {
         for (let i=0; i<9; i++) {
             if (s.pieces) board[s.r][i] = {type:s.pieces[i], side:s.side, p:false};
             else if (s.type && (s.c === undefined || s.c === i)) board[s.r][i] = {type:s.type, side:s.side, p:false};
-            if (board[s.r][i]) { render(); playSound(); await new Promise(r => setTimeout(r, 30)); }
+            if (board[s.r][i]) { render(); playSound(); await new Promise(r => setTimeout(r, 20)); }
         }
     }
 }
@@ -123,7 +122,7 @@ function getRawMoves(r, c, b) {
     const p = b[r][c]; if (!p) return [];
     let moves = [];
     let mData = (p.p && !['飛','角'].includes(p.type)) ? PIECE_DATA['金'].moves : PIECE_DATA[p.type].moves;
-    const s = p.side === S ? 1 : -1;
+    const s = (p.side === S) ? 1 : -1;
     if (Array.isArray(mData)) {
         mData.forEach(d => {
             let nr = r + d[0]*s, nc = c + d[1]*s;
@@ -183,6 +182,18 @@ function isDropLegal(type, r, c, side, b){
     return true;
 }
 
+function getAllControl(b, side) {
+    let control = Array(9).fill(0).map(() => Array(9).fill(0));
+    for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (b[r][c] && b[r][c].side === side) {
+                getRawMoves(r, c, b).forEach(m => control[m.r][m.c]++);
+            }
+        }
+    }
+    return control;
+}
+
 function handleClick(r,c){
     if(gameOver || (gameMode==='CPU' && turn===G) || document.getElementById('promo-dialog').style.display==='block') return;
     if(selected && selected.hIdx !== undefined){
@@ -211,12 +222,6 @@ function handleClick(r,c){
     render();
 }
 
-function showPromo(fr,fc,tr,tc){
-    const d=document.getElementById('promo-dialog'); d.style.display='block';
-    document.getElementById('promo-yes').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,true); };
-    document.getElementById('promo-no').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,false); };
-}
-
 function finalizeMove(fr,fc,tr,tc,promote){
     const p=board[fr][fc]; if(board[tr][tc]) hands[turn].push({type:board[tr][tc].type, side:turn, p:false});
     if(promote) p.p=true; board[tr][tc]=p; board[fr][fc]=null;
@@ -233,8 +238,9 @@ function checkEndGame(){
 
 async function cpuThink(){
     await new Promise(r => setTimeout(r, 800));
-    let best = {score: -99999};
+    let best = {score: -999999};
     let moves = [];
+    
     for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(board[r][c] && board[r][c].side===G) {
         getLegalMoves(r,c,board,G).forEach(m => moves.push({type:'move', fr:r, fc:c, tr:m.r, tc:m.c}));
     }
@@ -243,13 +249,33 @@ async function cpuThink(){
     if(moves.length === 0) return;
 
     moves.forEach(m => {
-        let score = Math.random() * 10;
+        let score = Math.random() * 15; // わずかな揺らぎ
+        const nextB = JSON.parse(JSON.stringify(board));
+        
         if(m.type==='move'){
             const target = board[m.tr][m.tc];
-            if(target) score += (target.p ? PROM_VAL[PIECE_DATA[target.type].pName] : PIECE_DATA[target.type].val);
-            if(m.tr >= 6) score += 30; // 成りへの接近
+            if(target) score += (target.p ? PROM_VAL[PIECE_DATA[target.type].pName] : PIECE_DATA[target.type].val) * 1.5;
+            nextB[m.tr][m.tc] = nextB[m.fr][m.fc]; nextB[m.fr][m.fc] = null;
+        } else {
+            nextB[m.tr][m.tc] = {type: m.piece, side: G, p: false};
+            score -= 20; 
         }
-        if(score > best.score) { best = {score, ...m}; }
+
+        const gControl = getAllControl(nextB, G);
+        const sControl = getAllControl(nextB, S);
+
+        for(let r=0; r<9; r++) for(let c=0; c<9; c++){
+            const p = nextB[r][c]; if(!p) continue;
+            const val = (p.p ? PROM_VAL[PIECE_DATA[p.type].pName] : PIECE_DATA[p.type].val) || 0;
+            if(p.side === G){
+                if(gControl[r][c] > 0) score += val * 0.15; // つながり評価
+                if(sControl[r][c] > gControl[r][c]) score -= val * 0.9; // 危険評価
+            } else {
+                if(gControl[r][c] > sControl[r][c]) score += val * 0.1; // プレッシャー
+            }
+        }
+        if(isCheck(S, nextB)) score += 400;
+        if(score > best.score) best = {score, ...m};
     });
 
     if(best.type==='move'){
@@ -298,6 +324,11 @@ function renderH(id,side){
         };
         el.appendChild(d);
     });
+}
+function showPromo(fr,fc,tr,tc){
+    const d=document.getElementById('promo-dialog'); d.style.display='block';
+    document.getElementById('promo-yes').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,true); };
+    document.getElementById('promo-no').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,false); };
 }
 </script>
 </body>
