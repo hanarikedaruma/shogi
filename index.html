@@ -3,48 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>将棋 - 起動改善版</title>
+<title>将棋 - 安定起動版</title>
 <style>
 :root{
-    --board-size: min(90vw, 75vh);
+    --board-size: min(92vw, 75vh);
     --cell-size: calc(var(--board-size) / 9);
     --board-color: #e3c16f;
     --piece-color: #ffebbc;
 }
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #f0e68c; overflow: hidden; touch-action: manipulation; }
-body { display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: "Hiragino Mincho ProN", serif; }
-.hand { display: flex; width: var(--board-size); height: 50px; background: #d2b48c; align-items: center; padding: 0 5px; border: 2px solid #8b4513; border-radius: 4px; box-sizing: border-box; overflow-x: auto; gap: 4px; }
-.hand.gote { transform: rotate(180deg); margin-bottom: 8px; }
-.hand.sente { margin-top: 8px; }
-.turn-box { padding: 4px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; margin-bottom: 5px; min-width: 80px; text-align: center; }
-.gote-turn { transform: rotate(180deg); }
+body { display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; }
+.hand { display: flex; width: var(--board-size); height: 50px; background: #d2b48c; align-items: center; padding: 0 5px; border: 2px solid #8b4513; border-radius: 4px; box-sizing: border-box; overflow: hidden; gap: 2px; }
+.hand.gote { transform: rotate(180deg); margin-bottom: 5px; }
+.hand.sente { margin-top: 5px; }
+.turn-box { padding: 4px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; margin-bottom: 5px; }
 #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); position: relative; }
-.cell { border: 0.2px solid rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
-.piece-shape { width: 85%; height: 88%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 0.5px solid #333; pointer-events: none; user-select: none; }
+.cell { border: 0.2px solid rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); }
+.piece-shape { width: 85%; height: 88%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 0.5px solid #333; pointer-events: none; }
 .p-gote { transform: rotate(180deg); }
-.promoted { color: #d32f2f; background: #fff5e6; }
+.promoted { color: #d32f2f; }
 .selected { background: #ffeb3b !important; }
 .movable::after { content: ""; width: 12px; height: 12px; background: rgba(0, 150, 0, 0.4); border-radius: 50%; position: absolute; }
-.check-warning { background: rgba(255, 0, 0, 0.4) !important; }
-
-#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border: 3px solid #333; padding: 25px; z-index: 1000; display: none; text-align: center; border-radius: 12px; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
-#promo-dialog button { margin: 10px; padding: 12px 24px; font-size: 1.2rem; cursor: pointer; border-radius: 6px; font-weight: bold; background: #eee; }
-
+#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border: 3px solid #333; padding: 20px; z-index: 1000; display: none; text-align: center; border-radius: 12px; }
 #start-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: white; cursor: pointer; }
-.start-btn { padding: 15px 40px; border: 2px solid white; border-radius: 30px; font-size: 1.2rem; margin-top: 20px; }
 </style>
 </head>
 <body>
 
 <div id="start-overlay">
-    <div style="font-size: 1.5rem;">本格対面将棋</div>
-    <div class="start-btn">対局開始</div>
+    <div style="font-size: 1.5rem;">将棋 アプリ</div>
+    <div style="margin-top:20px; padding:15px 30px; border:2px solid white; border-radius:30px;">対局開始</div>
 </div>
 
 <div id="promo-dialog">
-    <div style="margin-bottom:15px; font-size: 1.2rem; font-weight: bold;">成りますか？</div>
-    <button id="promo-yes">成る</button>
-    <button id="promo-no">成らず</button>
+    <div style="margin-bottom:15px; font-weight: bold;">成りますか？</div>
+    <button id="promo-yes" style="padding:10px 20px; margin:5px;">成る</button>
+    <button id="promo-no" style="padding:10px 20px; margin:5px;">成らず</button>
 </div>
 
 <div id="hand-gote" class="hand gote"></div>
@@ -59,72 +53,54 @@ let hands={[S]:[], [G]:[]};
 let turn=S, selected=null, possibleMoves=[], gameOver=false;
 let audioCtx = null;
 
-// 音声再生（エラー回避を強化）
-function playKomaSound(isDouble = false) {
+function playSound(isDouble = false) {
+    if (!audioCtx) return;
     try {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
-        const playOne = (delay = 0, volume = 0.5) => {
-            const now = audioCtx.currentTime + delay;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(350, now);
-            osc.frequency.exponentialRampToValueAtTime(120, now + 0.1);
-            gain.gain.setValueAtTime(volume, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(now); osc.stop(now + 0.15);
-        };
-        playOne(0);
-        if (isDouble) playOne(0.06, 0.35);
-    } catch(e) { console.error("Audio error:", e); }
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(350, t);
+        osc.frequency.exponentialRampToValueAtTime(120, t + 0.1);
+        g.gain.setValueAtTime(0.3, t);
+        g.gain.linearRampToValueAtTime(0, t + 0.1);
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.start(); osc.stop(t + 0.1);
+        if(isDouble) {
+            const osc2 = audioCtx.createOscillator();
+            const g2 = audioCtx.createGain();
+            osc2.type = 'triangle';
+            osc2.frequency.setValueAtTime(300, t+0.05);
+            g2.gain.setValueAtTime(0.2, t+0.05);
+            g2.gain.linearRampToValueAtTime(0, t+0.15);
+            osc2.connect(g2); g2.connect(audioCtx.destination);
+            osc2.start(t+0.05); osc2.stop(t+0.15);
+        }
+    } catch(e) {}
 }
 
-const PIECE_DATA={
-    '歩':{moves:[[-1,0]], canPromote:true, pName:'と'},
-    '香':{moves:'fwd_range', canPromote:true, pName:'杏'},
-    '桂':{moves:[[-2,-1],[-2,1]], canPromote:true, pName:'圭'},
-    '銀':{moves:[[-1,-1],[-1,0],[-1,1],[1,-1],[1,1]], canPromote:true, pName:'全'},
-    '金':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,0]]},
-    '角':{moves:'diag_range', canPromote:true, pName:'馬'},
-    '飛':{moves:'ortho_range', canPromote:true, pName:'龍'},
-    '玉':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]},
-    '王':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]}
-};
-
-// 盤面初期化（読み込み時に枠だけ作る）
-function initBoardStructure() {
-    const bEl = document.getElementById('board');
-    bEl.innerHTML = '';
-    for(let i=0; i<81; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell';
-        bEl.appendChild(cell);
-    }
-}
-initBoardStructure();
+const PIECE_DATA={'歩':{moves:[[-1,0]], canPromote:true, pName:'と'},'香':{moves:'fwd', canPromote:true, pName:'杏'},'桂':{moves:[[-2,-1],[-2,1]], canPromote:true, pName:'圭'},'銀':{moves:[[-1,-1],[-1,0],[-1,1],[1,-1],[1,1]], canPromote:true, pName:'全'},'金':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,0]]},'角':{moves:'diag', canPromote:true, pName:'馬'},'飛':{moves:'ortho', canPromote:true, pName:'龍'},'玉':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]},'王':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]}};
 
 async function startApp() {
     document.getElementById('start-overlay').style.display = 'none';
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
     
+    // 配置データ作成
     const line = ["香","桂","銀","金","王","金","銀","桂","香"];
-    const placements = [];
+    const ps = [];
     for(let i=0; i<9; i++) {
-        placements.push({r:0, c:i, p:{type:line[i], side:G, p:false}});
-        placements.push({r:8, c:i, p:{type:i===4?'玉':line[i], side:S, p:false}});
-        placements.push({r:2, c:i, p:{type:'歩', side:G, p:false}});
-        placements.push({r:6, c:i, p:{type:'歩', side:S, p:false}});
+        ps.push({r:0,c:i,type:line[i],side:G},{r:8,c:i,type:i===4?'玉':line[i],side:S},
+                {r:2,c:i,type:'歩',side:G},{r:6,c:i,type:'歩',side:S});
     }
-    placements.push({r:1, c:1, p:{type:'飛', side:G, p:false}}, {r:1, c:7, p:{type:'角', side:G, p:false}},
-                   {r:7, c:1, p:{type:'角', side:S, p:false}}, {r:7, c:7, p:{type:'飛', side:S, p:false}});
+    ps.push({r:1,c:1,type:'飛',side:G},{r:1,c:7,type:'角',side:G},{r:7,c:1,type:'角',side:S},{r:7,c:7,type:'飛',side:S});
 
-    for (let item of placements) {
-        board[item.r][item.c] = item.p;
+    // 駒を1つずつ配置（エラーが出ても次に進む）
+    for (let item of ps) {
+        board[item.r][item.c] = {type:item.type, side:item.side, p:false};
         render();
-        playKomaSound(false);
-        await new Promise(r => setTimeout(r, 30));
+        playSound();
+        await new Promise(r => setTimeout(r, 20)); 
     }
 }
 
@@ -132,174 +108,128 @@ function getRawMoves(r, c, b) {
     const p = b[r][c]; if (!p) return [];
     let moves = [];
     let mData = (p.p && !['飛','角'].includes(p.type)) ? PIECE_DATA['金'].moves : PIECE_DATA[p.type].moves;
+    const s = p.side === S ? 1 : -1;
     if (Array.isArray(mData)) {
         mData.forEach(d => {
-            let nr = r + (p.side === S ? d[0] : -d[0]), nc = c + (p.side === S ? d[1] : -d[1]);
-            if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9 && (!b[nr][nc] || b[nr][nc].side !== p.side)) moves.push({ r: nr, c: nc });
+            let nr = r + d[0]*s, nc = c + d[1]*s;
+            if (nr>=0 && nr<9 && nc>=0 && nc<9 && (!b[nr][nc] || b[nr][nc].side!==p.side)) moves.push({r:nr, c:nc});
         });
     } else {
-        let dirs = (mData === 'fwd_range') ? [[-1, 0]] : (mData === 'diag_range' ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] : [[0, 1], [0, -1], [1, 0], [-1, 0]]);
+        let dirs = (mData==='fwd')?[[-1,0]]:(mData==='diag')?[[1,1],[1,-1],[-1,1],[-1,-1]]:[[0,1],[0,-1],[1,0],[-1,0]];
         dirs.forEach(d => {
-            let nr = r, nc = c;
-            while (true) {
-                nr += (p.side === S ? d[0] : -d[0]); nc += (p.side === S ? d[1] : -d[1]);
-                if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9) break;
-                if (!b[nr][nc]) moves.push({ r: nr, c: nc });
-                else { if (b[nr][nc].side !== p.side) moves.push({ r: nr, c: nc }); break; }
+            let nr=r, nc=c;
+            while(true){
+                nr+=d[0]*s; nc+=d[1]*s;
+                if(nr<0||nr>=9||nc<0||nc>=9) break;
+                if(!b[nr][nc]) moves.push({r:nr, c:nc});
+                else { if(b[nr][nc].side!==p.side) moves.push({r:nr, c:nc}); break; }
             }
         });
     }
-    if (p.p && (p.type === '飛' || p.type === '角')) {
-        let extra = (p.type === '飛') ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] : [[0, 1], [0, -1], [1, 0], [-1, 0]];
-        extra.forEach(d => {
-            let nr = r + d[0], nc = c + d[1];
-            if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9 && (!b[nr][nc] || b[nr][nc].side !== p.side)) moves.push({ r: nr, c: nc });
+    if (p.p && (p.type==='飛'||p.type==='角')) {
+        let ex = (p.type==='飛')?[[1,1],[1,-1],[-1,1],[-1,-1]]:[[0,1],[0,-1],[1,0],[-1,0]];
+        ex.forEach(d => {
+            let nr=r+d[0], nc=c+d[1];
+            if(nr>=0 && nr<9 && nc>=0 && nc<9 && (!b[nr][nc]||b[nr][nc].side!==p.side)) moves.push({r:nr, c:nc});
         });
     }
     return moves;
 }
 
 function isCheck(side, b) {
-    let kingPos = null;
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && (b[r][c].type==='王'||b[r][c].type==='玉') && b[r][c].side===side) kingPos = {r, c};
-    if(!kingPos) return false;
-    const oppSide = (side===S?G:S);
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && b[r][c].side===oppSide) if(getRawMoves(r, c, b).some(m => m.r===kingPos.r && m.c===kingPos.c)) return true;
+    let kp = null;
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && (b[r][c].type==='王'||b[r][c].type==='玉') && b[r][c].side===side) kp={r,c};
+    if(!kp) return false;
+    const opp = (side===S?G:S);
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && b[r][c].side===opp) if(getRawMoves(r,c,b).some(m=>m.r===kp.r && m.c===kp.c)) return true;
     return false;
 }
 
-function getLegalMoves(r, c) {
-    return getRawMoves(r, c, board).filter(m => {
-        const tempBoard = JSON.parse(JSON.stringify(board));
-        tempBoard[m.r][m.c] = tempBoard[r][c]; tempBoard[r][c] = null;
-        return !isCheck(turn, tempBoard);
-    });
-}
-
 function handleClick(r,c){
-    if(gameOver || document.getElementById('promo-dialog').style.display === 'block') return;
+    if(gameOver || document.getElementById('promo-dialog').style.display==='block') return;
     const target=board[r][c];
-
     if(selected && selected.r!==undefined){
         const m=possibleMoves.find(x=>x.r===r && x.c===c);
-        if(m) prepareMove(selected.r, selected.c, r, c);
+        if(m) {
+            const p = board[selected.r][selected.c];
+            const inZ = (p.side===S && (r<=2||selected.r<=2)) || (p.side===G && (r>=6||selected.r>=6));
+            if(!p.p && PIECE_DATA[p.type].canPromote && inZ){
+                const must = (p.type==='歩'||p.type==='香')&&(p.side===S?r===0:r===8) || (p.type==='桂'&&(p.side===S?r<=1:r>=7));
+                if(must) { finalizeMove(selected.r,selected.c,r,c,true); }
+                else { showPromo(selected.r,selected.c,r,c); }
+            } else { finalizeMove(selected.r,selected.c,r,c,false); }
+        }
         selected=null; possibleMoves=[];
-    }else if(selected && selected.handIdx!==undefined){
-        if(!target && isDropLegal(selected.pieceType, r, c, selected.side)){
-            const tempBoard = JSON.parse(JSON.stringify(board));
-            tempBoard[r][c] = {type: selected.pieceType, side: turn, p: false};
-            if(!isCheck(turn, tempBoard)) {
-                board[r][c]=hands[turn].splice(selected.handIdx,1)[0];
-                playKomaSound(false);
-                finishTurn();
-            }
+    }else if(selected && selected.hIdx!==undefined){
+        if(!target && isDropLegal(selected.type, r, c, selected.side)){
+            board[r][c]=hands[turn].splice(selected.hIdx,1)[0];
+            playSound(); finishTurn();
         }
         selected=null; possibleMoves=[];
     }else if(target && target.side===turn){
         selected={r,c};
-        possibleMoves=getLegalMoves(r, c);
+        possibleMoves=getRawMoves(r,c,board).filter(m=>{
+            const tb=JSON.parse(JSON.stringify(board));
+            tb[m.r][m.c]=tb[r][c]; tb[r][c]=null; return !isCheck(turn,tb);
+        });
     }
     render();
 }
 
-function prepareMove(fromR, fromC, toR, toC) {
-    const p = board[fromR][fromC];
-    if(!p.p && PIECE_DATA[p.type].canPromote){
-        const inZone = (p.side===S && (toR<=2||fromR<=2)) || (p.side===G && (toR>=6||fromR>=6));
-        if(inZone){
-            const mustPromote = (p.type==='歩' || p.type==='香') && (p.side===S?toR===0:toR===8) || (p.type==='桂' && (p.side===S?toR<=1:toR>=7));
-            if(mustPromote) { executeFinalMove(fromR, fromC, toR, toC, true); return; }
-            else { showPromoDialog(fromR, fromC, toR, toC); return; }
-        }
-    }
-    executeFinalMove(fromR, fromC, toR, toC, false);
+function showPromo(fr,fc,tr,tc){
+    const d=document.getElementById('promo-dialog'); d.style.display='block';
+    document.getElementById('promo-yes').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,true); };
+    document.getElementById('promo-no').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,false); };
 }
 
-function showPromoDialog(fromR, fromC, toR, toC) {
-    const diag = document.getElementById('promo-dialog');
-    diag.style.display = 'block';
-    document.getElementById('promo-yes').onclick = () => { diag.style.display = 'none'; executeFinalMove(fromR, fromC, toR, toC, true); };
-    document.getElementById('promo-no').onclick = () => { diag.style.display = 'none'; executeFinalMove(fromR, fromC, toR, toC, false); };
-}
-
-function executeFinalMove(fromR, fromC, toR, toC, doPromote) {
-    const p = board[fromR][fromC];
-    const target = board[toR][toC];
+function finalizeMove(fr,fc,tr,tc,promote){
+    const p=board[fr][fc]; const target=board[tr][tc];
     if(target) hands[turn].push({type:target.type, side:turn, p:false});
-    if(doPromote) p.p = true;
-    board[toR][toC] = p; board[fromR][fromC] = null;
-    playKomaSound(!!target);
-    finishTurn();
+    if(promote) p.p=true;
+    board[tr][tc]=p; board[fr][fc]=null;
+    playSound(!!target); finishTurn();
 }
 
-function finishTurn() {
-    turn = (turn===S) ? G : S;
-    if(isCheckmate(turn)) {
-        setTimeout(() => alert((turn===S?"後手":"先手")+"の勝ちです！"), 100);
-        gameOver = true;
-    }
-    render();
-}
+function finishTurn(){ turn=(turn===S?G:S); render(); }
 
-function isCheckmate(side) {
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(board[r][c] && board[r][c].side===side) if(getLegalMoves(r, c).length > 0) return false;
-    for(let p of hands[side]) for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(!board[r][c] && isDropLegal(p.type, r, c, side, false)) {
-        const tempBoard = JSON.parse(JSON.stringify(board));
-        tempBoard[r][c] = {type: p.type, side: side, p: false};
-        if(!isCheck(side, tempBoard)) return false;
-    }
-    return isCheck(side, board);
-}
-
-function isDropLegal(type, r, c, side, showAlert = true){
-    if(type==='歩'){
-        for(let i=0; i<9; i++) if(board[i][c] && board[i][c].type==='歩' && !board[i][c].p && board[i][c].side===side) {
-            if(showAlert) alert("二歩は反則です"); return false;
-        }
-    }
-    if((type==='歩' || type==='香') && (side===S?r===0:r===8)) return false;
-    if(type==='桂' && (side===S?r<=1:r>=7)) return false;
+function isDropLegal(type,r,c,side){
+    if(type==='歩'){for(let i=0;i<9;i++)if(board[i][c]&&board[i][c].type==='歩'&&!board[i][c].p&&board[i][c].side===side)return false;}
+    if((type==='歩'||type==='香')&&(side===S?r===0:r===8))return false;
+    if(type==='桂'&&(side===S?r<=1:r>=7))return false;
     return true;
 }
 
 function render(){
     const bEl=document.getElementById('board'); bEl.innerHTML='';
-    const turnDisplay = document.getElementById('turn-display');
-    turnDisplay.textContent = turn===S?"先手番":"後手番";
-    turnDisplay.className="turn-box "+(turn===G?"gote-turn":"");
-    const checkState = isCheck(turn, board);
+    document.getElementById('turn-display').textContent=turn===S?"先手番":"後手番";
     for(let r=0;r<9;r++){
         for(let c=0;c<9;c++){
             const cell=document.createElement('div');
             cell.className='cell'+(selected&&selected.r===r&&selected.c===c?' selected':'');
-            if(possibleMoves.some(m => m.r===r && m.c===c)) cell.classList.add('movable');
+            if(possibleMoves.some(m=>m.r===r&&m.c===c)) cell.classList.add('movable');
             const p=board[r][c];
             if(p){
-                const shape=document.createElement('div');
-                shape.className=`piece-shape ${p.side===G?'p-gote':''} ${p.p?'promoted':''}`;
-                if(checkState && (p.type==='王'||p.type==='玉') && p.side===turn) cell.classList.add('check-warning');
-                shape.textContent=p.p?PIECE_DATA[p.type].pName:p.type;
-                cell.appendChild(shape);
+                const s=document.createElement('div');
+                s.className=`piece-shape ${p.side===G?'p-gote':''} ${p.p?'promoted':''}`;
+                s.textContent=p.p?PIECE_DATA[p.type].pName:p.type;
+                cell.appendChild(s);
             }
             cell.onclick=()=>handleClick(r,c);
             bEl.appendChild(cell);
         }
     }
-    renderHand('hand-sente',S); renderHand('hand-gote',G);
+    renderH('hand-sente',S); renderH('hand-gote',G);
 }
 
-function renderHand(id,side){
+function renderH(id,side){
     const el=document.getElementById(id); el.innerHTML='';
-    hands[side].forEach((p,idx)=>{
-        const wrap=document.createElement('div');
-        wrap.style.width="calc(var(--cell-size)*0.85)"; wrap.style.height="100%";
-        wrap.style.display="flex"; wrap.style.alignItems="center";
+    hands[side].forEach((p,i)=>{
         const d=document.createElement('div');
-        d.className='piece-shape'+(selected&&selected.handIdx===idx&&selected.side===side?' selected':'');
+        d.className='piece-shape'+(selected&&selected.hIdx===i&&selected.side===side?' selected':'');
         if(side===G) d.classList.add('p-gote');
-        d.textContent=p.type;
-        d.onclick=(e)=>{ e.stopPropagation(); if(turn===side){ selected={handIdx:idx, side:side, pieceType:p.type}; possibleMoves=[]; render(); } };
-        wrap.appendChild(d); el.appendChild(wrap);
+        d.style.width='35px'; d.style.height='40px'; d.textContent=p.type;
+        d.onclick=(e)=>{e.stopPropagation(); if(turn===side){selected={hIdx:i,side,type:p.type}; possibleMoves=[]; render();}};
+        el.appendChild(d);
     });
 }
 
