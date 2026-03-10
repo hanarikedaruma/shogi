@@ -3,77 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>本格対面将棋 - 安定版</title>
+<title>本格対面将棋 - 音響演出版</title>
 <style>
 :root{
-    /* 画面幅に合わせて盤面を調整 */
     --board-size: min(88vw, 70vh);
     --cell-size: calc(var(--board-size) / 9);
     --board-color: #e3c16f;
     --piece-color: #ffebbc;
 }
-html, body {
-    margin: 0; padding: 0; width: 100%; height: 100%;
-    background: #f0e68c; overflow: hidden;
-}
-body {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    font-family: serif; touch-action: none;
-}
-
-.hand {
-    display: flex; width: var(--board-size); height: 45px;
-    background: #d2b48c; align-items: center; padding: 0 5px;
-    border-radius: 4px; border: 1.5px solid #8b4513;
-    overflow-x: auto; gap: 4px; box-sizing: border-box; flex-shrink: 0;
-}
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #f0e68c; overflow: hidden; }
+body { display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: serif; touch-action: none; }
+.hand { display: flex; width: var(--board-size); height: 45px; background: #d2b48c; align-items: center; padding: 0 5px; border-radius: 4px; border: 1.5px solid #8b4513; overflow-x: auto; gap: 4px; box-sizing: border-box; flex-shrink: 0; }
 .hand.gote { transform: rotate(180deg); margin-bottom: 10px; }
 .hand.sente { margin-top: 10px; }
-
-.turn-box {
-    padding: 5px 20px; border-radius: 20px; background: #222; color: #fff;
-    font-size: 0.85rem; margin: 5px 0; min-width: 100px; text-align: center; flex-shrink: 0;
-}
+.turn-box { padding: 5px 20px; border-radius: 20px; background: #222; color: #fff; font-size: 0.85rem; margin: 5px 0; min-width: 100px; text-align: center; flex-shrink: 0; }
 .gote-turn { transform: rotate(180deg); }
-
-#board {
-    display: grid;
-    grid-template-columns: repeat(9, var(--cell-size));
-    grid-template-rows: repeat(9, var(--cell-size));
-    width: var(--board-size); height: var(--board-size);
-    border: 2px solid #333; background: var(--board-color);
-    box-shadow: 0 5px 20px rgba(0,0,0,0.4); box-sizing: content-box;
-    flex-shrink: 0;
-}
-
-.cell {
-    border: 0.3px solid rgba(0,0,0,0.3); display: flex;
-    align-items: center; justify-content: center; position: relative;
-    width: var(--cell-size); height: var(--cell-size); box-sizing: border-box;
-}
-
-.piece-shape {
-    width: 82%; height: 85%; background: var(--piece-color);
-    clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%);
-    display: flex; align-items: center; justify-content: center;
-    font-size: calc(var(--cell-size) * 0.5); font-weight: bold;
-    border: 0.5px solid #333; box-sizing: border-box;
-}
+#board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); box-shadow: 0 5px 20px rgba(0,0,0,0.4); box-sizing: content-box; flex-shrink: 0; }
+.cell { border: 0.3px solid rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
+.piece-shape { width: 82%; height: 85%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 0.5px solid #333; box-sizing: border-box; opacity: 0; transition: opacity 0.1s; }
+.piece-visible { opacity: 1; }
 .p-gote { transform: rotate(180deg); }
 .promoted { color: #d32f2f; background: #fff5e6; }
-
 .selected .piece-shape { background: #ffeb3b; outline: 2px solid #f44336; }
-.movable::after {
-    content: ""; width: 10px; height: 10px;
-    background: rgba(0, 200, 0, 0.6); border-radius: 50%;
-    position: absolute; z-index: 2;
-}
+.movable::after { content: ""; width: 10px; height: 10px; background: rgba(0, 200, 0, 0.6); border-radius: 50%; position: absolute; z-index: 2; }
 .check-warning { background: rgba(255, 0, 0, 0.5) !important; }
 .hand-selected { background: #ffeb3b !important; outline: 1.5px solid #f44336; }
+#start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 100; color: white; cursor: pointer; }
 </style>
 </head>
 <body>
+<div id="start-overlay">タップして開始</div>
 <div id="hand-gote" class="hand gote"></div>
 <div id="turn-display" class="turn-box">先手番</div>
 <div id="board"></div>
@@ -84,6 +43,39 @@ const S='S', G='G';
 let board=Array(9).fill(null).map(()=>Array(9).fill(null));
 let hands={[S]:[], [G]:[]};
 let turn=S, selected=null, possibleMoves=[], gameOver=false;
+let audioCtx = null;
+
+// 音声合成エンジン
+function playKomaSound(type) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (type === 'tap') { // 初期配置の軽い音
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+    } else if (type === 'hit') { // 駒同士が当たる「パチっ」
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.02);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.02);
+    } else if (type === 'board') { // 盤に響く「コッ」
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    }
+}
 
 const PIECE_DATA={
     '歩':{moves:[[-1,0]], canPromote:true, pName:'と'},
@@ -97,24 +89,34 @@ const PIECE_DATA={
     '王':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]}
 };
 
-function init(){
-    const line=["香","桂","銀","金","王","金","銀","桂","香"];
-    for(let i=0;i<9;i++){
-        board[0][i]={type:line[i],side:G,p:false};
-        board[8][i]={type:i===4?'玉':line[i],side:S,p:false};
-        board[2][i]={type:'歩',side:G,p:false};
-        board[6][i]={type:'歩',side:S,p:false};
+// 初期配置のアニメーション実行
+async function animatedInit() {
+    document.getElementById('start-overlay').style.display = 'none';
+    const line = ["香","桂","銀","金","王","金","銀","桂","香"];
+    const placements = [];
+    
+    // 配置データを準備
+    for(let i=0; i<9; i++) {
+        placements.push({r:0, c:i, p:{type:line[i], side:G, p:false}});
+        placements.push({r:8, c:i, p:{type:i===4?'玉':line[i], side:S, p:false}});
+        placements.push({r:2, c:i, p:{type:'歩', side:G, p:false}});
+        placements.push({r:6, c:i, p:{type:'歩', side:S, p:false}});
     }
-    board[1][1]={type:'飛',side:G,p:false}; board[1][7]={type:'角',side:G,p:false};
-    board[7][1]={type:'角',side:S,p:false}; board[7][7]={type:'飛',side:S,p:false};
-    render();
+    placements.push({r:1, c:1, p:{type:'飛', side:G, p:false}}, {r:1, c:7, p:{type:'角', side:G, p:false}},
+                   {r:7, c:1, p:{type:'角', side:S, p:false}}, {r:7, c:7, p:{type:'飛', side:S, p:false}});
+
+    for (let item of placements) {
+        board[item.r][item.c] = item.p;
+        render();
+        playKomaSound('tap');
+        await new Promise(r => setTimeout(r, 60)); // タタタタという間隔
+    }
 }
 
 function getRawMoves(r, c, b) {
     const p = b[r][c]; if (!p) return [];
     let moves = [];
     let mData = (p.p && !['飛','角'].includes(p.type)) ? PIECE_DATA['金'].moves : PIECE_DATA[p.type].moves;
-
     if (Array.isArray(mData)) {
         mData.forEach(d => {
             let nr = r + (p.side === S ? d[0] : -d[0]), nc = c + (p.side === S ? d[1] : -d[1]);
@@ -144,49 +146,41 @@ function getRawMoves(r, c, b) {
 
 function isCheck(side, b) {
     let kingPos = null;
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
-        if(b[r][c] && (b[r][c].type==='王'||b[r][c].type==='玉') && b[r][c].side===side) kingPos = {r, c};
-    }
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && (b[r][c].type==='王'||b[r][c].type==='玉') && b[r][c].side===side) kingPos = {r, c};
     if(!kingPos) return false;
     const oppSide = (side===S?G:S);
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
-        if(b[r][c] && b[r][c].side===oppSide) {
-            if(getRawMoves(r, c, b).some(m => m.r===kingPos.r && m.c===kingPos.c)) return true;
-        }
-    }
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && b[r][c].side===oppSide) if(getRawMoves(r, c, b).some(m => m.r===kingPos.r && m.c===kingPos.c)) return true;
     return false;
 }
 
 function getLegalMoves(r, c) {
-    const rawMoves = getRawMoves(r, c, board);
-    return rawMoves.filter(m => {
+    return getRawMoves(r, c, board).filter(m => {
         const tempBoard = JSON.parse(JSON.stringify(board));
-        tempBoard[m.r][m.c] = tempBoard[r][c];
-        tempBoard[r][c] = null;
+        tempBoard[m.r][m.c] = tempBoard[r][c]; tempBoard[r][c] = null;
         return !isCheck(turn, tempBoard);
     });
 }
 
 function isCheckmate(side) {
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
-        if(board[r][c] && board[r][c].side===side) {
-            if(getLegalMoves(r, c).length > 0) return false;
-        }
-    }
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(board[r][c] && board[r][c].side===side) if(getLegalMoves(r, c).length > 0) return false;
     const h = hands[side];
-    for(let i=0; i<h.length; i++) {
-        for(let r=0; r<9; r++) for(let c=0; c<9; c++) {
-            if(!board[r][c] && isDropLegal(h[i].type, r, c, side, false)) {
-                const tempBoard = JSON.parse(JSON.stringify(board));
-                tempBoard[r][c] = {type: h[i].type, side: side, p: false};
-                if(!isCheck(side, tempBoard)) return false;
-            }
-        }
+    for(let i=0; i<h.length; i++) for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(!board[r][c] && isDropLegal(h[i].type, r, c, side, false)) {
+        const tempBoard = JSON.parse(JSON.stringify(board));
+        tempBoard[r][c] = {type: h[i].type, side: side, p: false};
+        if(!isCheck(side, tempBoard)) return false;
     }
     return isCheck(side, board);
 }
 
-function handleClick(r,c){
+async function handleMoveSound(isCapture) {
+    if (isCapture) {
+        playKomaSound('hit');
+        await new Promise(r => setTimeout(r, 80));
+    }
+    playKomaSound('board');
+}
+
+async function handleClick(r,c){
     if(gameOver)return;
     const target=board[r][c];
 
@@ -194,9 +188,10 @@ function handleClick(r,c){
         const m=possibleMoves.find(x=>x.r===r && x.c===c);
         if(m){
             let p = JSON.parse(JSON.stringify(board[selected.r][selected.c]));
-            const oldTarget = board[r][c];
-            if(oldTarget) hands[turn].push({type:oldTarget.type, side:turn, p:false});
-            
+            const isCapture = !!target;
+            handleMoveSound(isCapture);
+
+            if(target) hands[turn].push({type:target.type, side:turn, p:false});
             if(!p.p && PIECE_DATA[p.type].canPromote){
                 const inZone = (p.side===S && (r<=2||selected.r<=2)) || (p.side===G && (r>=6||selected.r>=6));
                 if(inZone){
@@ -214,6 +209,7 @@ function handleClick(r,c){
             const tempBoard = JSON.parse(JSON.stringify(board));
             tempBoard[r][c] = {type: selected.pieceType, side: turn, p: false};
             if(!isCheck(turn, tempBoard)) {
+                handleMoveSound(false);
                 board[r][c]=hands[turn].splice(selected.handIdx,1)[0];
                 turn=(turn===S)?G:S;
                 if(isCheckmate(turn)) win(turn===S?G:S);
@@ -244,8 +240,7 @@ function win(side){
 }
 
 function render(){
-    const bEl=document.getElementById('board'); 
-    bEl.innerHTML='';
+    const bEl=document.getElementById('board'); bEl.innerHTML='';
     const turnDisplay = document.getElementById('turn-display');
     turnDisplay.textContent = turn===S?"先手番":"後手番";
     turnDisplay.className="turn-box "+(turn===G?"gote-turn":"");
@@ -259,7 +254,7 @@ function render(){
             const p=board[r][c];
             if(p){
                 const shape=document.createElement('div');
-                shape.className=`piece-shape ${p.side===G?'p-gote':''} ${p.p?'promoted':''}`;
+                shape.className=`piece-shape piece-visible ${p.side===G?'p-gote':''} ${p.p?'promoted':''}`;
                 if(checkState && (p.type==='王'||p.type==='玉') && p.side===turn) cell.classList.add('check-warning');
                 shape.textContent=p.p?PIECE_DATA[p.type].pName:p.type;
                 cell.appendChild(shape);
@@ -278,17 +273,20 @@ function renderHand(id,side){
         wrap.style.width="calc(var(--cell-size)*0.85)"; wrap.style.height="100%";
         wrap.style.display="flex"; wrap.style.alignItems="center";
         const d=document.createElement('div');
-        d.className='piece-shape'+(selected&&selected.handIdx===idx&&selected.side===side?' hand-selected':'');
+        d.className='piece-shape piece-visible'+(selected&&selected.handIdx===idx&&selected.side===side?' hand-selected':'');
         if(side===G) d.classList.add('p-gote');
         d.textContent=p.type;
-        d.onclick=(e)=>{
-            e.stopPropagation();
-            if(turn===side){ selected={handIdx:idx, side:side, pieceType:p.type}; possibleMoves=[]; render(); }
-        };
+        d.onclick=(e)=>{ e.stopPropagation(); if(turn===side){ selected={handIdx:idx, side:side, pieceType:p.type}; possibleMoves=[]; render(); } };
         wrap.appendChild(d); el.appendChild(wrap);
     });
 }
-init();
+
+document.getElementById('start-overlay').onclick = animatedInit;
+// 初期描画のみ実行
+for(let r=0; r<9; r++) for(let c=0; c<9; c++){
+    const cell=document.createElement('div'); cell.className='cell';
+    document.getElementById('board').appendChild(cell);
+}
 </script>
 </body>
 </html>
