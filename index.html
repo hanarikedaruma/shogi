@@ -22,20 +22,20 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
 .cell { border: 0.5px solid rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
 
-.piece-shape { width: 85%; height: 88%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 1px solid #444; pointer-events: none; user-select: none; transition: transform 0.1s; }
+.piece-shape { width: 85%; height: 88%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 1px solid #444; pointer-events: none; user-select: none; }
+.hand .piece-shape { pointer-events: auto; cursor: pointer; } /* 手駒はクリック可能に */
 .p-gote { transform: rotate(180deg); }
 .promoted { color: #d32f2f; }
-.selected { background: rgba(255, 235, 59, 0.6) !important; }
-.movable::after { content: ""; width: 14px; height: 14px; background: rgba(0, 150, 0, 0.4); border-radius: 50%; position: absolute; }
+.selected { background: rgba(255, 235, 59, 0.8) !important; outline: 2px solid orange; }
+.movable::after { content: ""; width: 14px; height: 14px; background: rgba(0, 150, 0, 0.5); border-radius: 50%; position: absolute; z-index: 10; }
 .in-check { background: rgba(255, 0, 0, 0.4) !important; animation: blink 0.8s infinite; }
 @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 4px solid #333; padding: 25px; z-index: 1000; display: none; text-align: center; border-radius: 15px; box-shadow: 0 0 50px rgba(0,0,0,0.6); }
-#promo-dialog button { margin: 10px; padding: 12px 24px; font-size: 1.2rem; cursor: pointer; border-radius: 8px; border: 1px solid #333; background: var(--piece-color); font-weight: bold; }
+#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 4px solid #333; padding: 25px; z-index: 1000; display: none; text-align: center; border-radius: 15px; }
+#promo-dialog button { margin: 10px; padding: 12px 24px; font-size: 1.2rem; cursor: pointer; font-weight: bold; }
 
 #start-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: white; cursor: pointer; }
-.btn-start { padding: 15px 40px; border: 2px solid white; border-radius: 40px; font-size: 1.5rem; transition: 0.3s; }
-.btn-start:hover { background: white; color: black; }
+.btn-start { padding: 15px 40px; border: 2px solid white; border-radius: 40px; font-size: 1.5rem; }
 </style>
 </head>
 <body>
@@ -43,7 +43,7 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 <div id="start-overlay"><div class="btn-start">対局開始</div></div>
 
 <div id="promo-dialog">
-    <div style="margin-bottom:15px; font-size: 1.2rem; font-weight: bold;">成りますか？</div>
+    <div style="margin-bottom:15px; font-weight: bold;">成りますか？</div>
     <button id="promo-yes">成る</button>
     <button id="promo-no">成らず</button>
 </div>
@@ -81,11 +81,11 @@ function playSound() {
         const g = audioCtx.createGain();
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(400, t);
-        osc.frequency.exponentialRampToValueAtTime(150, t + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(150, t + 0.1);
         g.gain.setValueAtTime(0.4, t);
-        g.gain.linearRampToValueAtTime(0, t + 0.12);
+        g.gain.linearRampToValueAtTime(0, t + 0.1);
         osc.connect(g); g.connect(audioCtx.destination);
-        osc.start(); osc.stop(t + 0.15);
+        osc.start(); osc.stop(t + 0.12);
     } catch(e) {}
 }
 
@@ -96,24 +96,16 @@ async function startApp() {
     const setup = [
         {r:0, pieces:["香","桂","銀","金","王","金","銀","桂","香"], side:G},
         {r:1, c:1, type:"飛", side:G}, {r:1, c:7, type:"角", side:G},
-        {r:2, type:"歩", side:G},
-        {r:6, type:"歩", side:S},
+        {r:2, type:"歩", side:G}, {r:6, type:"歩", side:S},
         {r:7, c:1, type:"角", side:S}, {r:7, c:7, type:"飛", side:S},
         {r:8, pieces:["香","桂","銀","金","玉","金","銀","桂","香"], side:S}
     ];
 
     for (let s of setup) {
         for (let i=0; i<9; i++) {
-            if (s.pieces) {
-                board[s.r][i] = {type:s.pieces[i], side:s.side, p:false};
-            } else if (s.type && (s.c === undefined || s.c === i)) {
-                board[s.r][i] = {type:s.type, side:s.side, p:false};
-            }
-            if (board[s.r][i]) {
-                render();
-                playSound();
-                await new Promise(r => setTimeout(r, 40));
-            }
+            if (s.pieces) board[s.r][i] = {type:s.pieces[i], side:s.side, p:false};
+            else if (s.type && (s.c === undefined || s.c === i)) board[s.r][i] = {type:s.type, side:s.side, p:false};
+            if (board[s.r][i]) { render(); playSound(); await new Promise(r => setTimeout(r, 40)); }
         }
     }
 }
@@ -167,12 +159,43 @@ function getLegalMoves(r, c) {
     });
 }
 
+function getDropMoves(type, side) {
+    let moves = [];
+    for(let r=0; r<9; r++){
+        for(let c=0; c<9; c++){
+            if(!board[r][c] && isDropLegal(type, r, c, side)){
+                const nextB = JSON.parse(JSON.stringify(board));
+                nextB[r][c] = {type, side, p:false};
+                if(!isCheck(side, nextB)) moves.push({r, c});
+            }
+        }
+    }
+    return moves;
+}
+
+function isDropLegal(type, r, c, side){
+    if(type==='歩'){for(let i=0;i<9;i++)if(board[i][c]&&board[i][c].type==='歩'&&!board[i][c].p&&board[i][c].side===side)return false;}
+    if((type==='歩'||type==='香')&&(side===S?r===0:r===8)) return false;
+    if(type==='桂'&&(side===S?r<=1:r>=7)) return false;
+    return true;
+}
+
 function handleClick(r,c){
     if(gameOver || document.getElementById('promo-dialog').style.display==='block') return;
-    const target=board[r][c];
-
-    if(selected && selected.r!==undefined){
-        const m=possibleMoves.find(x=>x.r===r && x.c===c);
+    
+    // 手駒を打つ処理
+    if(selected && selected.hIdx !== undefined){
+        const m = possibleMoves.find(x => x.r === r && x.c === c);
+        if(m){
+            board[r][c] = hands[turn].splice(selected.hIdx, 1)[0];
+            board[r][c].side = turn; 
+            playSound(); turn=(turn===S?G:S); checkEndGame();
+        }
+        selected=null; possibleMoves=[];
+    } 
+    // 盤上の駒を動かす処理
+    else if(selected && selected.r !== undefined){
+        const m = possibleMoves.find(x => x.r === r && x.c === c);
         if(m) {
             const p = board[selected.r][selected.c];
             const inZ = (p.side===S && (r<=2||selected.r<=2)) || (p.side===G && (r>=6||selected.r>=6));
@@ -183,33 +206,26 @@ function handleClick(r,c){
             } else finalizeMove(selected.r,selected.c,r,c,false);
         }
         selected=null; possibleMoves=[];
-    } else if(selected && selected.hIdx!==undefined){
-        if(!target && isDropLegal(selected.type, r, c, selected.side)){
-            const nextB = JSON.parse(JSON.stringify(board));
-            nextB[r][c] = {type:selected.type, side:turn, p:false};
-            if(!isCheck(turn, nextB)){
-                board[r][c] = hands[turn].splice(selected.hIdx, 1)[0];
-                board[r][c].side = turn; playSound(); turn=(turn===S?G:S); checkEndGame();
-            }
+    } 
+    // 駒の新規選択
+    else {
+        const target = board[r][c];
+        if(target && target.side === turn){
+            selected = {r, c};
+            possibleMoves = getLegalMoves(r, c);
         }
-        selected=null; possibleMoves=[];
-    } else if(target && target.side===turn){
-        selected={r,c}; possibleMoves=getLegalMoves(r,c);
     }
     render();
 }
 
-function isDropLegal(type, r, c, side){
-    if(type==='歩'){for(let i=0;i<9;i++)if(board[i][c]&&board[i][c].type==='歩'&&!board[i][c].p&&board[i][c].side===side)return false;}
-    if((type==='歩'||type==='香')&&(side===S?r===0:r===8)) return false;
-    if(type==='桂'&&(side===S?r<=1:r>=7)) return false;
-    return true;
-}
-
-function showPromo(fr,fc,tr,tc){
-    const d=document.getElementById('promo-dialog'); d.style.display='block';
-    document.getElementById('promo-yes').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,true); };
-    document.getElementById('promo-no').onclick=()=>{ d.style.display='none'; finalizeMove(fr,fc,tr,tc,false); };
+function handleHandClick(side, idx, type){
+    if(gameOver || side !== turn) return;
+    if(selected && selected.hIdx === idx) { selected=null; possibleMoves=[]; }
+    else {
+        selected = {hIdx: idx, side, type};
+        possibleMoves = getDropMoves(type, side);
+    }
+    render();
 }
 
 function finalizeMove(fr,fc,tr,tc,promote){
@@ -223,16 +239,8 @@ function finalizeMove(fr,fc,tr,tc,promote){
 function checkEndGame(){
     let hasMove = false;
     for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(board[r][c] && board[r][c].side===turn && getLegalMoves(r,c).length>0) hasMove=true;
-    if(!hasMove && hands[turn].length > 0){
-        for(let i=0; i<hands[turn].length; i++){
-            for(let r=0; r<9; r++) for(let c=0; c<9; c++){
-                if(!board[r][c] && isDropLegal(hands[turn][i].type, r, c, turn)){
-                    const nb = JSON.parse(JSON.stringify(board));
-                    nb[r][c] = {type:hands[turn][i].type, side:turn, p:false};
-                    if(!isCheck(turn, nb)) hasMove=true;
-                }
-            }
-        }
+    if(!hasMove) {
+        for(let p of hands[turn]) if(getDropMoves(p.type, turn).length > 0) hasMove = true;
     }
     if(!hasMove){ gameOver=true; setTimeout(()=>alert("詰みです！ " + (turn===S?"後手":"先手") + "の勝ち。"), 100); }
 }
@@ -244,8 +252,8 @@ function render(){
     for(let r=0;r<9;r++){
         for(let c=0;c<9;c++){
             const cell=document.createElement('div');
-            cell.className='cell'+(selected&&selected.r===r&&selected.c===c?' selected':'');
-            if(possibleMoves.some(m=>m.r===r&&m.c===c)) cell.classList.add('movable');
+            cell.className='cell'+(selected && selected.r===r && selected.c===c ? ' selected' : '');
+            if(possibleMoves.some(m=>m.r===r && m.c===c)) cell.classList.add('movable');
             const p=board[r][c];
             if(p){
                 const s=document.createElement('div');
@@ -265,10 +273,10 @@ function renderH(id,side){
     const el=document.getElementById(id); el.innerHTML='';
     hands[side].forEach((p,i)=>{
         const d=document.createElement('div');
-        d.className='piece-shape'+(selected&&selected.hIdx===i&&selected.side===side?' selected':'');
+        d.className='piece-shape'+(selected && selected.hIdx===i && selected.side===side ? ' selected' : '');
         if(side===G) d.classList.add('p-gote');
         d.style.width='38px'; d.style.height='44px'; d.textContent=p.type;
-        d.onclick=(e)=>{ e.stopPropagation(); if(turn===side){selected={hIdx:i,side,type:p.type}; possibleMoves=[]; render();} };
+        d.onclick=(e)=>{ e.stopPropagation(); handleHandClick(side, i, p.type); };
         el.appendChild(d);
     });
 }
