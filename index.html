@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>将棋 - 超安定版</title>
+<title>将棋 - 持ち駒修正版</title>
 <style>
 :root{
     --board-size: min(92vw, 75vh);
@@ -14,8 +14,8 @@
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #f0e68c; overflow: hidden; touch-action: manipulation; }
 body { display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; }
 
-.hand { display: flex; width: var(--board-size); height: 50px; background: #d2b48c; align-items: center; padding: 0 5px; border: 2px solid #8b4513; border-radius: 4px; box-sizing: border-box; overflow: hidden; gap: 2px; }
-.hand.gote { transform: rotate(180deg); margin-bottom: 5px; }
+.hand { display: flex; width: var(--board-size); height: 50px; background: #d2b48c; align-items: center; padding: 0 5px; border: 2px solid #8b4513; border-radius: 4px; box-sizing: border-box; overflow-x: auto; gap: 4px; }
+.hand.gote { margin-bottom: 5px; } /* コンテナ自体は回転させず中身で調整 */
 .hand.sente { margin-top: 5px; }
 .turn-box { padding: 4px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; margin-bottom: 5px; }
 
@@ -23,6 +23,7 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .cell { border: 0.2px solid rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); }
 
 .piece-shape { width: 85%; height: 88%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 0.5px solid #333; pointer-events: none; user-select: none; }
+/* 後手番の駒を相手側（上）に向ける */
 .p-gote { transform: rotate(180deg); }
 .promoted { color: #d32f2f; }
 .selected { background: #ffeb3b !important; }
@@ -35,8 +36,8 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 <body>
 
 <div id="start-overlay">
-    <div style="font-size: 1.5rem; font-weight: bold;">本格対面将棋</div>
-    <div style="margin-top:20px; padding:15px 40px; border:2px solid white; border-radius:30px; font-size: 1.2rem;">対局開始</div>
+    <div style="font-size: 1.5rem; font-weight: bold;">将棋</div>
+    <div style="margin-top:20px; padding:15px 40px; border:2px solid white; border-radius:30px;">対局開始</div>
 </div>
 
 <div id="promo-dialog">
@@ -57,8 +58,7 @@ let hands={[S]:[], [G]:[]};
 let turn=S, selected=null, possibleMoves=[], gameOver=false;
 let audioCtx = null;
 
-// 音声再生
-function playSound(isDouble = false) {
+function playSound() {
     if (!audioCtx) return;
     try {
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -77,13 +77,11 @@ function playSound(isDouble = false) {
 
 const PIECE_DATA={'歩':{moves:[[-1,0]], canPromote:true, pName:'と'},'香':{moves:'fwd', canPromote:true, pName:'杏'},'桂':{moves:[[-2,-1],[-2,1]], canPromote:true, pName:'圭'},'銀':{moves:[[-1,-1],[-1,0],[-1,1],[1,-1],[1,1]], canPromote:true, pName:'全'},'金':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,0]]},'角':{moves:'diag', canPromote:true, pName:'馬'},'飛':{moves:'ortho', canPromote:true, pName:'龍'},'玉':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]},'王':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]}};
 
-// 起動処理：アニメーションを廃止して即時展開
 function startApp() {
     document.getElementById('start-overlay').style.display = 'none';
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
     
     const line = ["香","桂","銀","金","王","金","銀","桂","香"];
-    // 先手・後手の駒を一斉にボードへ
     for(let i=0; i<9; i++) {
         board[0][i] = {type:line[i], side:G, p:false};
         board[8][i] = {type:i===4?'玉':line[i], side:S, p:false};
@@ -92,12 +90,10 @@ function startApp() {
     }
     board[1][1]={type:'飛',side:G,p:false}; board[1][7]={type:'角',side:G,p:false};
     board[7][1]={type:'角',side:S,p:false}; board[7][7]={type:'飛',side:S,p:false};
-
     render();
-    playSound(); // 開始の音
+    playSound();
 }
 
-// 駒の動き計算 (簡略化版)
 function getRawMoves(r, c, b) {
     const p = b[r][c]; if (!p) return [];
     let moves = [];
@@ -133,6 +129,8 @@ function getRawMoves(r, c, b) {
 function handleClick(r,c){
     if(gameOver || document.getElementById('promo-dialog').style.display==='block') return;
     const target=board[r][c];
+
+    // 盤上の駒の移動
     if(selected && selected.r!==undefined){
         const m=possibleMoves.find(x=>x.r===r && x.c===c);
         if(m) {
@@ -145,11 +143,32 @@ function handleClick(r,c){
             } else { finalizeMove(selected.r,selected.c,r,c,false); }
         }
         selected=null; possibleMoves=[];
-    } else if(target && target.side===turn){
+    } 
+    // 持ち駒を打つ
+    else if(selected && selected.hIdx!==undefined){
+        if(!target && isDropLegal(selected.type, r, c, selected.side)){
+            board[r][c] = hands[turn].splice(selected.hIdx, 1)[0];
+            board[r][c].side = turn; // 打った駒の所有権を現在のターンに
+            playSound();
+            turn = (turn===S?G:S);
+        }
+        selected=null; possibleMoves=[];
+    }
+    // 駒の選択
+    else if(target && target.side===turn){
         selected={r,c};
         possibleMoves=getRawMoves(r,c,board);
     }
     render();
+}
+
+function isDropLegal(type, r, c, side){
+    if(type==='歩'){
+        for(let i=0; i<9; i++) if(board[i][c] && board[i][c].type==='歩' && !board[i][c].p && board[i][c].side===side) return false;
+    }
+    if((type==='歩'||type==='香') && (side===S?r===0:r===8)) return false;
+    if(type==='桂' && (side===S?r<=1:r>=7)) return false;
+    return true;
 }
 
 function showPromo(fr,fc,tr,tc){
@@ -163,7 +182,7 @@ function finalizeMove(fr,fc,tr,tc,promote){
     if(target) hands[turn].push({type:target.type, side:turn, p:false});
     if(promote) p.p=true;
     board[tr][tc]=p; board[fr][fc]=null;
-    playSound(); // ここで不成でも音が鳴る
+    playSound();
     turn=(turn===S?G:S); render();
 }
 
@@ -192,11 +211,25 @@ function render(){
 function renderH(id,side){
     const el=document.getElementById(id); el.innerHTML='';
     hands[side].forEach((p,i)=>{
+        const wrapper = document.createElement('div');
+        wrapper.style.cursor = 'pointer';
         const d=document.createElement('div');
-        d.className='piece-shape';
+        d.className='piece-shape' + (selected && selected.hIdx===i && selected.side===side ? ' selected' : '');
+        // 後手の持ち駒なら回転させる
         if(side===G) d.classList.add('p-gote');
         d.style.width='35px'; d.style.height='40px'; d.textContent=p.type;
-        el.appendChild(d);
+        
+        // 持ち駒クリック時のイベント
+        wrapper.onclick=(e)=>{
+            e.stopPropagation();
+            if(turn===side){
+                selected={hIdx:i, side:side, type:p.type};
+                possibleMoves=[];
+                render();
+            }
+        };
+        wrapper.appendChild(d);
+        el.appendChild(wrapper);
     });
 }
 
