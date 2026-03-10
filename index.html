@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>将棋 - 安定起動版</title>
+<title>将棋 - 超安定版</title>
 <style>
 :root{
     --board-size: min(92vw, 75vh);
@@ -13,32 +13,36 @@
 }
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #f0e68c; overflow: hidden; touch-action: manipulation; }
 body { display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; }
+
 .hand { display: flex; width: var(--board-size); height: 50px; background: #d2b48c; align-items: center; padding: 0 5px; border: 2px solid #8b4513; border-radius: 4px; box-sizing: border-box; overflow: hidden; gap: 2px; }
 .hand.gote { transform: rotate(180deg); margin-bottom: 5px; }
 .hand.sente { margin-top: 5px; }
 .turn-box { padding: 4px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; margin-bottom: 5px; }
+
 #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); position: relative; }
 .cell { border: 0.2px solid rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); }
-.piece-shape { width: 85%; height: 88%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 0.5px solid #333; pointer-events: none; }
+
+.piece-shape { width: 85%; height: 88%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.5); font-weight: bold; border: 0.5px solid #333; pointer-events: none; user-select: none; }
 .p-gote { transform: rotate(180deg); }
 .promoted { color: #d32f2f; }
 .selected { background: #ffeb3b !important; }
 .movable::after { content: ""; width: 12px; height: 12px; background: rgba(0, 150, 0, 0.4); border-radius: 50%; position: absolute; }
-#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border: 3px solid #333; padding: 20px; z-index: 1000; display: none; text-align: center; border-radius: 12px; }
-#start-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: white; cursor: pointer; }
+
+#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border: 3px solid #333; padding: 20px; z-index: 1000; display: none; text-align: center; border-radius: 12px; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+#start-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: white; cursor: pointer; }
 </style>
 </head>
 <body>
 
 <div id="start-overlay">
-    <div style="font-size: 1.5rem;">将棋 アプリ</div>
-    <div style="margin-top:20px; padding:15px 30px; border:2px solid white; border-radius:30px;">対局開始</div>
+    <div style="font-size: 1.5rem; font-weight: bold;">本格対面将棋</div>
+    <div style="margin-top:20px; padding:15px 40px; border:2px solid white; border-radius:30px; font-size: 1.2rem;">対局開始</div>
 </div>
 
 <div id="promo-dialog">
     <div style="margin-bottom:15px; font-weight: bold;">成りますか？</div>
-    <button id="promo-yes" style="padding:10px 20px; margin:5px;">成る</button>
-    <button id="promo-no" style="padding:10px 20px; margin:5px;">成らず</button>
+    <button id="promo-yes" style="padding:12px 24px; margin:5px; font-weight:bold;">成る</button>
+    <button id="promo-no" style="padding:12px 24px; margin:5px; font-weight:bold;">成らず</button>
 </div>
 
 <div id="hand-gote" class="hand gote"></div>
@@ -53,6 +57,7 @@ let hands={[S]:[], [G]:[]};
 let turn=S, selected=null, possibleMoves=[], gameOver=false;
 let audioCtx = null;
 
+// 音声再生
 function playSound(isDouble = false) {
     if (!audioCtx) return;
     try {
@@ -61,49 +66,38 @@ function playSound(isDouble = false) {
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(350, t);
-        osc.frequency.exponentialRampToValueAtTime(120, t + 0.1);
+        osc.frequency.setValueAtTime(380, t);
+        osc.frequency.exponentialRampToValueAtTime(150, t + 0.1);
         g.gain.setValueAtTime(0.3, t);
         g.gain.linearRampToValueAtTime(0, t + 0.1);
         osc.connect(g); g.connect(audioCtx.destination);
-        osc.start(); osc.stop(t + 0.1);
-        if(isDouble) {
-            const osc2 = audioCtx.createOscillator();
-            const g2 = audioCtx.createGain();
-            osc2.type = 'triangle';
-            osc2.frequency.setValueAtTime(300, t+0.05);
-            g2.gain.setValueAtTime(0.2, t+0.05);
-            g2.gain.linearRampToValueAtTime(0, t+0.15);
-            osc2.connect(g2); g2.connect(audioCtx.destination);
-            osc2.start(t+0.05); osc2.stop(t+0.15);
-        }
+        osc.start(); osc.stop(t + 0.12);
     } catch(e) {}
 }
 
 const PIECE_DATA={'歩':{moves:[[-1,0]], canPromote:true, pName:'と'},'香':{moves:'fwd', canPromote:true, pName:'杏'},'桂':{moves:[[-2,-1],[-2,1]], canPromote:true, pName:'圭'},'銀':{moves:[[-1,-1],[-1,0],[-1,1],[1,-1],[1,1]], canPromote:true, pName:'全'},'金':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,0]]},'角':{moves:'diag', canPromote:true, pName:'馬'},'飛':{moves:'ortho', canPromote:true, pName:'龍'},'玉':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]},'王':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]}};
 
-async function startApp() {
+// 起動処理：アニメーションを廃止して即時展開
+function startApp() {
     document.getElementById('start-overlay').style.display = 'none';
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
     
-    // 配置データ作成
     const line = ["香","桂","銀","金","王","金","銀","桂","香"];
-    const ps = [];
+    // 先手・後手の駒を一斉にボードへ
     for(let i=0; i<9; i++) {
-        ps.push({r:0,c:i,type:line[i],side:G},{r:8,c:i,type:i===4?'玉':line[i],side:S},
-                {r:2,c:i,type:'歩',side:G},{r:6,c:i,type:'歩',side:S});
+        board[0][i] = {type:line[i], side:G, p:false};
+        board[8][i] = {type:i===4?'玉':line[i], side:S, p:false};
+        board[2][i] = {type:'歩', side:G, p:false};
+        board[6][i] = {type:'歩', side:S, p:false};
     }
-    ps.push({r:1,c:1,type:'飛',side:G},{r:1,c:7,type:'角',side:G},{r:7,c:1,type:'角',side:S},{r:7,c:7,type:'飛',side:S});
+    board[1][1]={type:'飛',side:G,p:false}; board[1][7]={type:'角',side:G,p:false};
+    board[7][1]={type:'角',side:S,p:false}; board[7][7]={type:'飛',side:S,p:false};
 
-    // 駒を1つずつ配置（エラーが出ても次に進む）
-    for (let item of ps) {
-        board[item.r][item.c] = {type:item.type, side:item.side, p:false};
-        render();
-        playSound();
-        await new Promise(r => setTimeout(r, 20)); 
-    }
+    render();
+    playSound(); // 開始の音
 }
 
+// 駒の動き計算 (簡略化版)
 function getRawMoves(r, c, b) {
     const p = b[r][c]; if (!p) return [];
     let moves = [];
@@ -136,15 +130,6 @@ function getRawMoves(r, c, b) {
     return moves;
 }
 
-function isCheck(side, b) {
-    let kp = null;
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && (b[r][c].type==='王'||b[r][c].type==='玉') && b[r][c].side===side) kp={r,c};
-    if(!kp) return false;
-    const opp = (side===S?G:S);
-    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && b[r][c].side===opp) if(getRawMoves(r,c,b).some(m=>m.r===kp.r && m.c===kp.c)) return true;
-    return false;
-}
-
 function handleClick(r,c){
     if(gameOver || document.getElementById('promo-dialog').style.display==='block') return;
     const target=board[r][c];
@@ -160,18 +145,9 @@ function handleClick(r,c){
             } else { finalizeMove(selected.r,selected.c,r,c,false); }
         }
         selected=null; possibleMoves=[];
-    }else if(selected && selected.hIdx!==undefined){
-        if(!target && isDropLegal(selected.type, r, c, selected.side)){
-            board[r][c]=hands[turn].splice(selected.hIdx,1)[0];
-            playSound(); finishTurn();
-        }
-        selected=null; possibleMoves=[];
-    }else if(target && target.side===turn){
+    } else if(target && target.side===turn){
         selected={r,c};
-        possibleMoves=getRawMoves(r,c,board).filter(m=>{
-            const tb=JSON.parse(JSON.stringify(board));
-            tb[m.r][m.c]=tb[r][c]; tb[r][c]=null; return !isCheck(turn,tb);
-        });
+        possibleMoves=getRawMoves(r,c,board);
     }
     render();
 }
@@ -187,16 +163,8 @@ function finalizeMove(fr,fc,tr,tc,promote){
     if(target) hands[turn].push({type:target.type, side:turn, p:false});
     if(promote) p.p=true;
     board[tr][tc]=p; board[fr][fc]=null;
-    playSound(!!target); finishTurn();
-}
-
-function finishTurn(){ turn=(turn===S?G:S); render(); }
-
-function isDropLegal(type,r,c,side){
-    if(type==='歩'){for(let i=0;i<9;i++)if(board[i][c]&&board[i][c].type==='歩'&&!board[i][c].p&&board[i][c].side===side)return false;}
-    if((type==='歩'||type==='香')&&(side===S?r===0:r===8))return false;
-    if(type==='桂'&&(side===S?r<=1:r>=7))return false;
-    return true;
+    playSound(); // ここで不成でも音が鳴る
+    turn=(turn===S?G:S); render();
 }
 
 function render(){
@@ -225,10 +193,9 @@ function renderH(id,side){
     const el=document.getElementById(id); el.innerHTML='';
     hands[side].forEach((p,i)=>{
         const d=document.createElement('div');
-        d.className='piece-shape'+(selected&&selected.hIdx===i&&selected.side===side?' selected':'');
+        d.className='piece-shape';
         if(side===G) d.classList.add('p-gote');
         d.style.width='35px'; d.style.height='40px'; d.textContent=p.type;
-        d.onclick=(e)=>{e.stopPropagation(); if(turn===side){selected={hIdx:i,side,type:p.type}; possibleMoves=[]; render();}};
         el.appendChild(d);
     });
 }
