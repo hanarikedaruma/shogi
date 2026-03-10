@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>本格対面将棋 - 駒音改良版</title>
+<title>将棋 - 安定音響版</title>
 <style>
 :root{
     --board-size: min(88vw, 70vh);
@@ -18,7 +18,7 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .hand.sente { margin-top: 10px; }
 .turn-box { padding: 5px 20px; border-radius: 20px; background: #222; color: #fff; font-size: 0.85rem; margin: 5px 0; min-width: 100px; text-align: center; flex-shrink: 0; }
 .gote-turn { transform: rotate(180deg); }
-#board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); box-shadow: 0 5px 20px rgba(0,0,0,0.4); box-sizing: content-box; flex-shrink: 0; }
+#board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); box-shadow: 0 5px 20px rgba(0,0,0,0.4); box-sizing: content-box; position: relative; }
 .cell { border: 0.3px solid rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
 .piece-shape { width: 82%; height: 85%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.48); font-weight: bold; border: 0.5px solid #333; box-sizing: border-box; }
 .p-gote { transform: rotate(180deg); }
@@ -26,12 +26,21 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .selected .piece-shape { background: #ffeb3b; outline: 2px solid #f44336; }
 .movable::after { content: ""; width: 10px; height: 10px; background: rgba(0, 200, 0, 0.6); border-radius: 50%; position: absolute; z-index: 2; }
 .check-warning { background: rgba(255, 0, 0, 0.5) !important; }
-.hand-selected { background: #ffeb3b !important; outline: 1.5px solid #f44336; }
+
+/* 成り選択パネル */
+#promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 2px solid #333; padding: 20px; z-index: 200; display: none; text-align: center; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+#promo-dialog button { margin: 10px; padding: 10px 20px; font-size: 1.1rem; cursor: pointer; border-radius: 4px; border: 1.5px solid #333; background: #eee; }
+
 #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 100; color: white; cursor: pointer; font-size: 1.2rem; }
 </style>
 </head>
 <body>
 <div id="start-overlay">タップして開始</div>
+<div id="promo-dialog">
+    <div style="margin-bottom:10px; font-weight:bold;">成りますか？</div>
+    <button id="promo-yes">成る</button>
+    <button id="promo-no">成らず</button>
+</div>
 <div id="hand-gote" class="hand gote"></div>
 <div id="turn-display" class="turn-box">先手番</div>
 <div id="board"></div>
@@ -44,49 +53,47 @@ let hands={[S]:[], [G]:[]};
 let turn=S, selected=null, possibleMoves=[], gameOver=false;
 let audioCtx = null;
 
-// 高く乾いた「パチッ」という駒音（リアル志向）
+// 少し低く鈍い「コンッ」という駒音
 function playKomaSound(isDouble = false) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    const playOne = (delay = 0, volume = 0.5) => {
+    const playOne = (delay = 0, volume = 0.6) => {
         const now = audioCtx.currentTime + delay;
         
-        // 1. 木のアタック音（高いノイズ成分）
-        const bufferSize = audioCtx.sampleRate * 0.04;
+        // 芯の音（三角波 - 400Hz付近の少し鈍い音）
+        const osc = audioCtx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(450, now); 
+        osc.frequency.exponentialRampToValueAtTime(200, now + 0.08);
+        
+        const oscGain = audioCtx.createGain();
+        oscGain.gain.setValueAtTime(volume, now);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+        // わずかな打撃ノイズ（低域寄り）
+        const bufferSize = audioCtx.sampleRate * 0.05;
         const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-        
         const noise = audioCtx.createBufferSource();
         noise.buffer = buffer;
         const noiseFilter = audioCtx.createBiquadFilter();
-        noiseFilter.type = 'highpass';
-        noiseFilter.frequency.setValueAtTime(2000, now); // 高音だけ通す
-        
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.setValueAtTime(1500, now); // 高音を削る
         const noiseGain = audioCtx.createGain();
-        noiseGain.gain.setValueAtTime(volume * 0.4, now);
-        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
+        noiseGain.gain.setValueAtTime(volume * 0.2, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
 
-        // 2. 盤に響く芯の音（三角波 - 少し高めに設定）
-        const osc = audioCtx.createOscillator();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(800, now); // 以前より高く設定
-        osc.frequency.exponentialRampToValueAtTime(300, now + 0.05);
-        
-        const oscGain = audioCtx.createGain();
-        oscGain.gain.setValueAtTime(volume * 0.6, now);
-        oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-
-        noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(audioCtx.destination);
         osc.connect(oscGain); oscGain.connect(audioCtx.destination);
+        noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(audioCtx.destination);
         
-        noise.start(now); noise.stop(now + 0.04);
-        osc.start(now); osc.stop(now + 0.05);
+        osc.start(now); osc.stop(now + 0.1);
+        noise.start(now); noise.stop(now + 0.05);
     };
 
     playOne(0);
-    if (isDouble) playOne(0.06, 0.4); // パパチッ
+    if (isDouble) playOne(0.06, 0.4);
 }
 
 const PIECE_DATA={
@@ -118,7 +125,7 @@ async function animatedInit() {
         board[item.r][item.c] = item.p;
         render();
         playKomaSound(false);
-        await new Promise(r => setTimeout(r, 60)); // タタタタッ
+        await new Promise(r => setTimeout(r, 60));
     }
 }
 
@@ -171,37 +178,13 @@ function getLegalMoves(r, c) {
 }
 
 function handleClick(r,c){
-    if(gameOver)return;
+    if(gameOver || document.getElementById('promo-dialog').style.display === 'block') return;
     const target=board[r][c];
 
     if(selected && selected.r!==undefined){
         const m=possibleMoves.find(x=>x.r===r && x.c===c);
         if(m){
-            let p = JSON.parse(JSON.stringify(board[selected.r][selected.c]));
-            const isCapture = !!target;
-            playKomaSound(isCapture);
-            
-            if(target) hands[turn].push({type:target.type, side:turn, p:false});
-            
-            const oldR = selected.r, oldC = selected.c;
-            board[r][c]=p; board[oldR][oldC]=null;
-
-            // 成りの処理
-            if(!p.p && PIECE_DATA[p.type].canPromote){
-                const inZone = (p.side===S && (r<=2||oldR<=2)) || (p.side===G && (r>=6||oldR>=6));
-                if(inZone){
-                    const mustPromote = (p.type==='歩' || p.type==='香') && (p.side===S?r===0:r===8) || (p.type==='桂' && (side===S?r<=1:r>=7));
-                    if(mustPromote || confirm("成りますか？")) {
-                        board[r][c].p=true;
-                        // ダイアログ後に音声を確実に鳴らすための再開処理
-                        setTimeout(() => {
-                            if (audioCtx) audioCtx.resume().then(() => playKomaSound(false));
-                        }, 50);
-                    }
-                }
-            }
-            turn=(turn===S)?G:S;
-            if(isCheckmate(turn)) win(turn===S?G:S);
+            executeMove(selected.r, selected.c, r, c);
         }
         selected=null; possibleMoves=[];
     }else if(selected && selected.handIdx!==undefined){
@@ -213,13 +196,61 @@ function handleClick(r,c){
                 board[r][c]=hands[turn].splice(selected.handIdx,1)[0];
                 turn=(turn===S)?G:S;
                 if(isCheckmate(turn)) win(turn===S?G:S);
-            } else { alert("王手を回避してください"); }
+            }
         }
         selected=null; possibleMoves=[];
     }else if(target && target.side===turn){
         selected={r,c};
         possibleMoves=getLegalMoves(r, c);
     }
+    render();
+}
+
+function executeMove(fromR, fromC, toR, toC) {
+    const p = board[fromR][fromC];
+    const target = board[toR][toC];
+    playKomaSound(!!target);
+    
+    if(target) hands[turn].push({type:target.type, side:turn, p:false});
+    board[toR][toC] = p;
+    board[fromR][fromC] = null;
+
+    // 成りの判定
+    if(!p.p && PIECE_DATA[p.type].canPromote){
+        const inZone = (p.side===S && (toR<=2||fromR<=2)) || (p.side===G && (toR>=6||fromR>=6));
+        if(inZone){
+            const mustPromote = (p.type==='歩' || p.type==='香') && (p.side===S?toR===0:toR===8) || (p.type==='桂' && (p.side===S?toR<=1:toR>=7));
+            if(mustPromote) {
+                board[toR][toC].p = true;
+                playKomaSound(false);
+                finishTurn();
+            } else {
+                showPromoDialog(toR, toC);
+                return; // ダイアログの応答待ち
+            }
+        }
+    }
+    finishTurn();
+}
+
+function showPromoDialog(r, c) {
+    const diag = document.getElementById('promo-dialog');
+    diag.style.display = 'block';
+    document.getElementById('promo-yes').onclick = () => {
+        board[r][c].p = true;
+        diag.style.display = 'none';
+        playKomaSound(false);
+        finishTurn();
+    };
+    document.getElementById('promo-no').onclick = () => {
+        diag.style.display = 'none';
+        finishTurn();
+    };
+}
+
+function finishTurn() {
+    turn = (turn===S) ? G : S;
+    if(isCheckmate(turn)) win(turn===S?G:S);
     render();
 }
 
@@ -246,7 +277,7 @@ function isDropLegal(type, r, c, side, showAlert = true){
 
 function win(side){
     gameOver=true; render();
-    setTimeout(()=>{ alert((side===S?"先手":"後手")+"の勝ちです！（詰み）"); location.reload(); },200);
+    setTimeout(()=>{ alert((side===S?"先手":"後手")+"の勝ちです！"); location.reload(); },200);
 }
 
 function render(){
@@ -290,7 +321,6 @@ function renderHand(id,side){
         wrap.appendChild(d); el.appendChild(wrap);
     });
 }
-
 document.getElementById('start-overlay').onclick = animatedInit;
 </script>
 </body>
