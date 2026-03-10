@@ -6,38 +6,47 @@
     <title>本格対面将棋</title>
     <style>
         :root { 
-            /* 画面幅の92%を9分割することで、左右に4%ずつの余白を作り、右端が切れるのを防ぎます */
-            --cell-size: calc(92vw / 9); 
+            --cell-size: calc(90vw / 9); 
             --board-color: #e3c16f; 
+            --piece-color: #ffebbc;
         }
         body { margin: 0; background: #f0e68c; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; touch-action: none; overflow: hidden; }
         
-        /* 持ち駒エリア */
-        .hand { display: flex; width: 90vw; height: 40px; background: rgba(0,0,0,0.1); align-items: center; padding: 0 10px; border-radius: 8px; font-size: 1.1rem; overflow-x: auto; gap: 10px; border: 1px solid rgba(0,0,0,0.2); }
+        /* 持ち駒エリア（駒台） */
+        .hand { display: flex; width: 85vw; height: 45px; background: #d2b48c; align-items: center; padding: 0 10px; border-radius: 5px; border: 2px solid #8b4513; overflow-x: auto; gap: 5px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.2); }
         .hand.gote { transform: rotate(180deg); margin-bottom: 10px; }
         .hand.sente { margin-top: 10px; }
-        .hand-piece { padding: 2px 5px; background: #fff; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .hand-selected { background: #ffeb3b !important; border: 2px solid #f44336; }
 
-        .turn-box { padding: 5px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; font-weight: bold; margin-bottom: 5px; transition: 0.3s; }
-        .gote-turn { transform: rotate(180deg); }
+        /* 駒の基本形状（五角形を模した形） */
+        .piece-shape {
+            width: 85%; height: 90%;
+            background: var(--piece-color);
+            clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%);
+            display: flex; align-items: center; justify-content: center;
+            font-size: calc(var(--cell-size) * 0.55);
+            font-weight: bold; border: 1px solid #333;
+            box-shadow: 0 2px 2px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .p-gote { transform: rotate(180deg); }
+        .promoted { color: #d32f2f; background: #fff5e6; }
 
         /* 盤面 */
-        #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); border: 2px solid #333; background: var(--board-color); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        .cell { border: 0.5px solid rgba(0,0,0,0.4); width: var(--cell-size); height: var(--cell-size); display: flex; align-items: center; justify-content: center; position: relative; box-sizing: border-box; }
+        #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); border: 2px solid #333; background: var(--board-color); }
+        .cell { border: 0.5px solid rgba(0,0,0,0.4); width: var(--cell-size); height: var(--cell-size); display: flex; align-items: center; justify-content: center; position: relative; }
         
-        .selected { background: rgba(255, 255, 0, 0.6) !important; }
-        .movable::after { content: ""; width: 12px; height: 12px; background: rgba(0, 200, 0, 0.4); border-radius: 50%; position: absolute; }
+        .selected .piece-shape { background: #ffeb3b; border: 2px solid #f44336; }
+        .movable::after { content: ""; width: 14px; height: 14px; background: rgba(0, 200, 0, 0.5); border-radius: 50%; position: absolute; z-index: 10; }
 
-        .piece { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.7); font-weight: bold; user-select: none; }
-        .p-gote { transform: rotate(180deg); }
-        .promoted { color: #d32f2f; }
+        .hand-selected { background: #ffeb3b !important; border: 2px solid #f44336; }
+        .turn-box { padding: 4px 20px; border-radius: 20px; background: #333; color: #fff; font-size: 0.9rem; font-weight: bold; margin-bottom: 5px; }
+        .gote-turn { transform: rotate(180deg); }
     </style>
 </head>
 <body>
 
 <div id="hand-gote" class="hand gote"></div>
-<div id="turn-display" class="turn-box">先手の手番</div>
+<div id="turn-display" class="turn-box">先手番</div>
 <div id="board"></div>
 <div id="hand-sente" class="hand sente"></div>
 
@@ -46,7 +55,7 @@
     let board = Array(9).fill(null).map(() => Array(9).fill(null));
     let hands = { [S]: [], [G]: [] };
     let turn = S;
-    let selected = null; // {r, c} or {handIdx, side}
+    let selected = null; 
     let possibleMoves = [];
     let gameOver = false;
 
@@ -110,43 +119,44 @@
 
     function handleClick(r, c) {
         if (gameOver) return;
+        const target = board[r][c];
 
         if (selected && selected.r !== undefined) {
-            // 盤面の駒を動かす
             const m = possibleMoves.find(x => x.r === r && x.c === c);
             if (m) {
                 let p = board[selected.r][selected.c];
-                if (board[r][c]) {
-                    if (board[r][c].type === '王' || board[r][c].type === '玉') win(turn);
-                    hands[turn].push({ type: board[r][c].type, side: turn, p: false });
+                if (target) {
+                    if (target.type === '王' || target.type === '玉') {
+                        board[r][c] = p; board[selected.r][selected.c] = null;
+                        render(); win(turn); return;
+                    }
+                    hands[turn].push({ type: target.type, side: turn, p: false });
                 }
                 if (!p.p && PIECE_DATA[p.type].canPromote && ((p.side === S && (r <= 2 || selected.r <= 2)) || (p.side === G && (r >= 6 || selected.r >= 6)))) {
                     if (confirm("成りますか？")) p.p = true;
                 }
                 board[r][c] = p; board[selected.r][selected.c] = null;
-                endTurn();
+                turn = (turn === S) ? G : S;
             }
             selected = null; possibleMoves = [];
         } else if (selected && selected.handIdx !== undefined) {
-            // 持ち駒を打つ
-            if (!board[r][c]) {
+            if (!target) {
                 board[r][c] = hands[turn].splice(selected.handIdx, 1)[0];
-                endTurn();
+                turn = (turn === S) ? G : S;
             }
             selected = null;
-        } else if (board[r][c] && board[r][c].side === turn) {
+        } else if (target && target.side === turn) {
             selected = {r, c}; possibleMoves = getMoves(r, c);
         }
         render();
     }
 
-    function endTurn() {
-        turn = (turn === S) ? G : S;
-    }
-
     function win(side) {
         gameOver = true;
-        setTimeout(() => alert((side === S ? "先手" : "後手") + "の勝ちです！"), 100);
+        setTimeout(() => {
+            alert((side === S ? "先手" : "後手") + "の勝ちです！");
+            location.reload(); // リロードして再戦
+        }, 100);
     }
 
     function render() {
@@ -162,10 +172,10 @@
                 if (possibleMoves.some(m => m.r === r && m.c === c)) cell.classList.add('movable');
                 const p = board[r][c];
                 if (p) {
-                    const pEl = document.createElement('div');
-                    pEl.className = `piece ${p.side === G ? 'p-gote' : ''} ${p.p ? 'promoted' : ''}`;
-                    pEl.textContent = p.p ? PIECE_DATA[p.type].pName : p.type;
-                    cell.appendChild(pEl);
+                    const shape = document.createElement('div');
+                    shape.className = `piece-shape ${p.side === G ? 'p-gote' : ''} ${p.p ? 'promoted' : ''}`;
+                    shape.textContent = p.p ? PIECE_DATA[p.type].pName : p.type;
+                    cell.appendChild(shape);
                 }
                 cell.onclick = () => handleClick(r, c);
                 bEl.appendChild(cell);
@@ -178,17 +188,22 @@
         const el = document.getElementById(id);
         el.innerHTML = '';
         hands[side].forEach((p, idx) => {
+            const wrap = document.createElement('div');
+            wrap.style.width = "calc(var(--cell-size) * 0.8)";
+            wrap.style.height = "100%";
+            wrap.style.display = "flex";
+            wrap.style.alignItems = "center";
             const d = document.createElement('div');
-            d.className = 'hand-piece' + (selected && selected.handIdx === idx && selected.side === side ? ' hand-selected' : '');
+            d.className = 'piece-shape' + (selected && selected.handIdx === idx && selected.side === side ? ' hand-selected' : '');
+            if (side === G) d.classList.add('p-gote');
             d.textContent = p.type;
             d.onclick = (e) => {
                 e.stopPropagation();
                 if (turn === side) { selected = { handIdx: idx, side: side }; possibleMoves = []; render(); }
             };
-            el.appendChild(d);
+            wrap.appendChild(d); el.appendChild(wrap);
         });
     }
-
     init();
 </script>
 </body>
