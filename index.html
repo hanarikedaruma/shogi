@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>将棋 - 完備音響版</title>
+<title>将棋 - 挙動改善版</title>
 <style>
 :root{
     --board-size: min(88vw, 70vh);
@@ -30,7 +30,6 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 /* 成り選択パネル */
 #promo-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 2px solid #333; padding: 20px; z-index: 200; display: none; text-align: center; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.6); }
 #promo-dialog button { margin: 10px; padding: 12px 24px; font-size: 1.2rem; cursor: pointer; border-radius: 6px; border: 2px solid #444; background: #f8f8f8; font-family: serif; font-weight: bold; }
-#promo-dialog button:active { background: #ddd; }
 
 #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 100; color: white; cursor: pointer; font-size: 1.2rem; }
 </style>
@@ -54,25 +53,20 @@ let hands={[S]:[], [G]:[]};
 let turn=S, selected=null, possibleMoves=[], gameOver=false;
 let audioCtx = null;
 
-// 低く鈍い「ドンッ」という響きを混ぜた駒音
 function playKomaSound(isDouble = false) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
     const playOne = (delay = 0, volume = 0.7) => {
         const now = audioCtx.currentTime + delay;
-        
-        // 1. 芯の音（三角波 - 350Hz付近：少し低めに調整）
         const osc = audioCtx.createOscillator();
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(380, now); 
         osc.frequency.exponentialRampToValueAtTime(150, now + 0.1);
-        
         const oscGain = audioCtx.createGain();
         oscGain.gain.setValueAtTime(volume, now);
         oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
-        // 2. 盤の響き（サイン波 - 超低域：ドンという手応え）
         const body = audioCtx.createOscillator();
         body.type = 'sine';
         body.frequency.setValueAtTime(120, now);
@@ -80,27 +74,10 @@ function playKomaSound(isDouble = false) {
         bodyGain.gain.setValueAtTime(volume * 0.3, now);
         bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
 
-        // 3. わずかな打撃ノイズ（高音をカットしたマイルドな音）
-        const bufferSize = audioCtx.sampleRate * 0.05;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
-        const noiseFilter = audioCtx.createBiquadFilter();
-        noiseFilter.type = 'lowpass';
-        noiseFilter.frequency.setValueAtTime(800, now); // より低くマイルドに
-        const noiseGain = audioCtx.createGain();
-        noiseGain.gain.setValueAtTime(volume * 0.15, now);
-        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
-
         osc.connect(oscGain); oscGain.connect(audioCtx.destination);
         body.connect(bodyGain); bodyGain.connect(audioCtx.destination);
-        noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(audioCtx.destination);
-        
         osc.start(now); osc.stop(now + 0.12);
         body.start(now); body.stop(now + 0.12);
-        noise.start(now); noise.stop(now + 0.05);
     };
 
     playOne(0);
@@ -176,7 +153,7 @@ function isCheck(side, b) {
     for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && (b[r][c].type==='王'||b[r][c].type==='玉') && b[r][c].side===side) kingPos = {r, c};
     if(!kingPos) return false;
     const oppSide = (side===S?G:S);
-    for(let r=0; r<9; r++) for(let c=0; r<9; c++) if(b[r][c] && b[r][c].side===oppSide) if(getRawMoves(r, c, b).some(m => m.r===kingPos.r && m.c===kingPos.c)) return true;
+    for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c] && b[r][c].side===oppSide) if(getRawMoves(r, c, b).some(m => m.r===kingPos.r && m.c===kingPos.c)) return true;
     return false;
 }
 
@@ -194,17 +171,16 @@ function handleClick(r,c){
 
     if(selected && selected.r!==undefined){
         const m=possibleMoves.find(x=>x.r===r && x.c===c);
-        if(m) executeMove(selected.r, selected.c, r, c);
+        if(m) prepareMove(selected.r, selected.c, r, c);
         selected=null; possibleMoves=[];
     }else if(selected && selected.handIdx!==undefined){
         if(!target && isDropLegal(selected.pieceType, r, c, selected.side)){
             const tempBoard = JSON.parse(JSON.stringify(board));
             tempBoard[r][c] = {type: selected.pieceType, side: turn, p: false};
             if(!isCheck(turn, tempBoard)) {
-                playKomaSound(false);
                 board[r][c]=hands[turn].splice(selected.handIdx,1)[0];
-                turn=(turn===S)?G:S;
-                if(isCheckmate(turn)) win(turn===S?G:S);
+                playKomaSound(false);
+                finishTurn();
             }
         }
         selected=null; possibleMoves=[];
@@ -215,46 +191,49 @@ function handleClick(r,c){
     render();
 }
 
-function executeMove(fromR, fromC, toR, toC) {
+function prepareMove(fromR, fromC, toR, toC) {
     const p = board[fromR][fromC];
-    const target = board[toR][toC];
-    playKomaSound(!!target);
-    
-    if(target) hands[turn].push({type:target.type, side:turn, p:false});
-    board[toR][toC] = p;
-    board[fromR][fromC] = null;
-
+    // 成りの判定（移動前に行う）
     if(!p.p && PIECE_DATA[p.type].canPromote){
         const inZone = (p.side===S && (toR<=2||fromR<=2)) || (p.side===G && (toR>=6||fromR>=6));
         if(inZone){
             const mustPromote = (p.type==='歩' || p.type==='香') && (p.side===S?toR===0:toR===8) || (p.type==='桂' && (p.side===S?toR<=1:toR>=7));
             if(mustPromote) {
-                board[toR][toC].p = true;
-                playKomaSound(false); // 成りの仕上げ音
-                finishTurn();
+                executeFinalMove(fromR, fromC, toR, toC, true);
             } else {
-                showPromoDialog(toR, toC);
-                return;
+                showPromoDialog(fromR, fromC, toR, toC);
             }
+            return;
         }
     }
-    finishTurn();
+    executeFinalMove(fromR, fromC, toR, toC, false);
 }
 
-function showPromoDialog(r, c) {
+function showPromoDialog(fromR, fromC, toR, toC) {
     const diag = document.getElementById('promo-dialog');
     diag.style.display = 'block';
     document.getElementById('promo-yes').onclick = () => {
-        board[r][c].p = true;
         diag.style.display = 'none';
-        playKomaSound(false); // 成った時の音
-        finishTurn();
+        executeFinalMove(fromR, fromC, toR, toC, true);
     };
     document.getElementById('promo-no').onclick = () => {
         diag.style.display = 'none';
-        playKomaSound(false); // 成らなかった時も音を鳴らす
-        finishTurn();
+        executeFinalMove(fromR, fromC, toR, toC, false);
     };
+}
+
+function executeFinalMove(fromR, fromC, toR, toC, doPromote) {
+    const p = board[fromR][fromC];
+    const target = board[toR][toC];
+    
+    if(target) hands[turn].push({type:target.type, side:turn, p:false});
+    if(doPromote) p.p = true;
+    
+    board[toR][toC] = p;
+    board[fromR][fromC] = null;
+    
+    playKomaSound(!!target); // 移動完了後に音を鳴らす
+    finishTurn();
 }
 
 function finishTurn() {
