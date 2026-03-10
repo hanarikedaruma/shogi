@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>本格対面将棋 - リアル音響版</title>
+<title>本格対面将棋 - 駒音改良版</title>
 <style>
 :root{
     --board-size: min(88vw, 70vh);
@@ -20,7 +20,7 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .gote-turn { transform: rotate(180deg); }
 #board { display: grid; grid-template-columns: repeat(9, var(--cell-size)); grid-template-rows: repeat(9, var(--cell-size)); width: var(--board-size); height: var(--board-size); border: 2px solid #333; background: var(--board-color); box-shadow: 0 5px 20px rgba(0,0,0,0.4); box-sizing: content-box; flex-shrink: 0; }
 .cell { border: 0.3px solid rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
-.piece-shape { width: 82%; height: 85%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.48); font-weight: bold; border: 0.5px solid #333; box-sizing: border-box; opacity: 1; }
+.piece-shape { width: 82%; height: 85%; background: var(--piece-color); clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%); display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell-size) * 0.48); font-weight: bold; border: 0.5px solid #333; box-sizing: border-box; }
 .p-gote { transform: rotate(180deg); }
 .promoted { color: #d32f2f; background: #fff5e6; }
 .selected .piece-shape { background: #ffeb3b; outline: 2px solid #f44336; }
@@ -44,45 +44,49 @@ let hands={[S]:[], [G]:[]};
 let turn=S, selected=null, possibleMoves=[], gameOver=false;
 let audioCtx = null;
 
-// ホワイトノイズ成分を混ぜたリアルな駒音
+// 高く乾いた「パチッ」という駒音（リアル志向）
 function playKomaSound(isDouble = false) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    const playOne = (delay = 0, volume = 0.4) => {
-        const now = audioCtx.currentTime + delay;
-        const duration = 0.06;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
 
-        // 衝撃音（ノイズ）
-        const bufferSize = audioCtx.sampleRate * duration;
+    const playOne = (delay = 0, volume = 0.5) => {
+        const now = audioCtx.currentTime + delay;
+        
+        // 1. 木のアタック音（高いノイズ成分）
+        const bufferSize = audioCtx.sampleRate * 0.04;
         const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-
+        
         const noise = audioCtx.createBufferSource();
         noise.buffer = buffer;
-        const noiseGain = audioCtx.createGain();
-        noiseGain.gain.setValueAtTime(volume, now);
-        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        const noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'highpass';
+        noiseFilter.frequency.setValueAtTime(2000, now); // 高音だけ通す
         
-        // 芯の音（三角波）
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(volume * 0.4, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
+
+        // 2. 盤に響く芯の音（三角波 - 少し高めに設定）
         const osc = audioCtx.createOscillator();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(1200 + Math.random()*200, now);
-        osc.frequency.exponentialRampToValueAtTime(400, now + duration);
+        osc.frequency.setValueAtTime(800, now); // 以前より高く設定
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.05);
         
         const oscGain = audioCtx.createGain();
-        oscGain.gain.setValueAtTime(volume * 0.5, now);
-        oscGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        oscGain.gain.setValueAtTime(volume * 0.6, now);
+        oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
 
-        noise.connect(noiseGain); noiseGain.connect(audioCtx.destination);
+        noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(audioCtx.destination);
         osc.connect(oscGain); oscGain.connect(audioCtx.destination);
         
-        noise.start(now); noise.stop(now + duration);
-        osc.start(now); osc.stop(now + duration);
+        noise.start(now); noise.stop(now + 0.04);
+        osc.start(now); osc.stop(now + 0.05);
     };
 
     playOne(0);
-    if (isDouble) playOne(0.05, 0.3); // パパチッ
+    if (isDouble) playOne(0.06, 0.4); // パパチッ
 }
 
 const PIECE_DATA={
@@ -97,17 +101,25 @@ const PIECE_DATA={
     '王':{moves:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]}
 };
 
-function initBoard(){
+async function animatedInit() {
+    document.getElementById('start-overlay').style.display = 'none';
     const line = ["香","桂","銀","金","王","金","銀","桂","香"];
+    const placements = [];
     for(let i=0; i<9; i++) {
-        board[0][i]={type:line[i], side:G, p:false};
-        board[8][i]={type:i===4?'玉':line[i], side:S, p:false};
-        board[2][i]={type:'歩', side:G, p:false};
-        board[6][i]={type:'歩', side:S, p:false};
+        placements.push({r:0, c:i, p:{type:line[i], side:G, p:false}});
+        placements.push({r:8, c:i, p:{type:i===4?'玉':line[i], side:S, p:false}});
+        placements.push({r:2, c:i, p:{type:'歩', side:G, p:false}});
+        placements.push({r:6, c:i, p:{type:'歩', side:S, p:false}});
     }
-    board[1][1]={type:'飛', side:G, p:false}; board[1][7]={type:'角', side:G, p:false};
-    board[7][1]={type:'角', side:S, p:false}; board[7][7]={type:'飛', side:S, p:false};
-    render();
+    placements.push({r:1, c:1, p:{type:'飛', side:G, p:false}}, {r:1, c:7, p:{type:'角', side:G, p:false}},
+                   {r:7, c:1, p:{type:'角', side:S, p:false}}, {r:7, c:7, p:{type:'飛', side:S, p:false}});
+
+    for (let item of placements) {
+        board[item.r][item.c] = item.p;
+        render();
+        playKomaSound(false);
+        await new Promise(r => setTimeout(r, 60)); // タタタタッ
+    }
 }
 
 function getRawMoves(r, c, b) {
@@ -174,13 +186,17 @@ function handleClick(r,c){
             const oldR = selected.r, oldC = selected.c;
             board[r][c]=p; board[oldR][oldC]=null;
 
+            // 成りの処理
             if(!p.p && PIECE_DATA[p.type].canPromote){
                 const inZone = (p.side===S && (r<=2||oldR<=2)) || (p.side===G && (r>=6||oldR>=6));
                 if(inZone){
-                    const mustPromote = (p.type==='歩' || p.type==='香') && (p.side===S?r===0:r===8) || (p.type==='桂' && (p.side===S?r<=1:r>=7));
+                    const mustPromote = (p.type==='歩' || p.type==='香') && (p.side===S?r===0:r===8) || (p.type==='桂' && (side===S?r<=1:r>=7));
                     if(mustPromote || confirm("成りますか？")) {
                         board[r][c].p=true;
-                        setTimeout(() => playKomaSound(false), 50);
+                        // ダイアログ後に音声を確実に鳴らすための再開処理
+                        setTimeout(() => {
+                            if (audioCtx) audioCtx.resume().then(() => playKomaSound(false));
+                        }, 50);
                     }
                 }
             }
@@ -275,10 +291,7 @@ function renderHand(id,side){
     });
 }
 
-document.getElementById('start-overlay').onclick = () => {
-    document.getElementById('start-overlay').style.display = 'none';
-    initBoard();
-};
+document.getElementById('start-overlay').onclick = animatedInit;
 </script>
 </body>
 </html>
